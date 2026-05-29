@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartCompras</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #09090b;
+      --card:     #111113;
+      --border:   #27272a;
+      --surface:  #18181b;
+      --text:     #fafafa;
+      --muted:    #71717a;
+      --dim:      #3f3f46;
+      --indigo:   #6366f1;
+      --success:  #22c55e;
+      --warning:  #f59e0b;
+      --danger:   #ef4444;
+      --r: 8px;
+      --t: 150ms ease;
+    }
+    html, body { height: 100%; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1.6;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1,h2,h3,h4,h5,h6 { font-family: 'Space Grotesk', sans-serif; font-weight: 600; }
+    #root { min-height: 100vh; }
+    input, select, textarea {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--r);
+      padding: 9px 12px;
+      outline: none;
+      width: 100%;
+      transition: border-color var(--t);
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--indigo); }
+    input::placeholder, textarea::placeholder { color: var(--dim); }
+    select option { background: var(--surface); }
+    button { cursor: pointer; font-family: 'DM Sans', sans-serif; border: none; background: none; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      height: 2px; background: var(--border); border-radius: 99px;
+      padding: 0; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--indigo); cursor: pointer;
+    }
+    input[type=range]:focus { border-color: transparent; box-shadow: none; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useCallback, useRef } = React;
+
+/* ─── CONSTANTS ─────────────────────────────────────────────────────────── */
+const CATEGORIES = [
+  { id:'mascotas',  label:'Mascotas',         emoji:'🐾' },
+  { id:'verduras',  label:'Verduras y Frutas', emoji:'🥦' },
+  { id:'carnes',    label:'Carnes',            emoji:'🥩' },
+  { id:'lacteos',   label:'Lácteos',           emoji:'🥛' },
+  { id:'limpieza',  label:'Limpieza',          emoji:'🧴' },
+  { id:'abarrotes', label:'Abarrotes',         emoji:'🍝' },
+  { id:'panaderia', label:'Panadería',         emoji:'🥖' },
+  { id:'farmacia',  label:'Farmacia',          emoji:'💊' },
+  { id:'bebidas',   label:'Bebidas',           emoji:'🧃' },
+  { id:'otros',     label:'Otros',             emoji:'📦' },
+];
+const STORES = ['Supermaxi','Coral','El Arándano','AKI','Mi Comisariato','Otro'];
+const UNITS   = ['unidad','kg','g','litro','ml','paquete','caja','bolsa','docena','lb'];
+
+/* ─── HELPERS ────────────────────────────────────────────────────────────── */
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const today = () => new Date().toISOString().split('T')[0];
+
+function daysDiff(d1, d2) {
+  const a = new Date(d1 + 'T12:00:00'), b = new Date(d2 + 'T12:00:00');
+  return Math.round((b - a) / 86400000);
+}
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + Math.round(n));
+  return d.toISOString().split('T')[0];
+}
+function daysFromToday(dateStr) {
+  return daysDiff(today(), dateStr);
+}
+function fmtDate(dateStr) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-EC', { day:'2-digit', month:'short', year:'numeric' });
+}
+function fmtDateShort(dateStr) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-EC', { day:'2-digit', month:'short' });
+}
+
+function calcLearnedDuration(history) {
+  // history sorted oldest → newest
+  if (!history || history.length < 2) return null;
+  const intervals = [];
+  for (let i = 1; i < history.length; i++) {
+    const elapsed = daysDiff(history[i-1].date, history[i].date);
+    const rPct = history[i].remainingPct || 0;
+    let dur;
+    if (rPct <= 0) {
+      dur = elapsed;
+    } else {
+      // consumed (100-rPct)% in elapsed days → full batch = elapsed * 100/(100-rPct)
+      dur = elapsed * 100 / (100 - rPct);
+    }
+    if (dur > 0) intervals.push(dur);
+  }
+  if (!intervals.length) return null;
+  return Math.round(intervals.reduce((a,b) => a+b,0) / intervals.length);
+}
+
+function getNextPurchaseDate(product) {
+  const h = product.purchaseHistory;
+  if (!h || !h.length) return null;
+  const dur = calcLearnedDuration(h);
+  if (!dur) return null;
+  const last = h[h.length-1];
+  return addDays(last.date, dur);
+}
+
+function monthlyEstimate(product) {
+  const dur = calcLearnedDuration(product.purchaseHistory);
+  if (!dur || dur <= 0) return null;
+  const h = product.purchaseHistory;
+  if (!h || !h.length) return null;
+  const price = h[h.length-1].price;
+  if (!price) return null;
+  return price * (30 / dur);
+}
+
+function getCat(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[9]; }
+
+function getBestWorst(prices) {
+  const entries = Object.entries(prices || {}).filter(([,v]) => v > 0);
+  if (!entries.length) return { best:null, worst:null };
+  entries.sort((a,b) => a[1]-b[1]);
+  return { best: entries[0], worst: entries[entries.length-1] };
+}
+
+/* ─── SEED DATA ──────────────────────────────────────────────────────────── */
+const SEED = [
+  {
+    id:'s1', name:'Leche La Lechera 1lt x6', category:'lacteos', unit:'pack',
+    expiryDate: addDays(today(), 12),
+    notes:'',
+    prices: { Supermaxi:5.80, Coral:5.60, 'El Arándano':5.95 },
+    purchaseHistory: [
+      { id:'h1a', date: addDays(today(),-21), store:'Supermaxi',     price:5.80, quantity:1, remainingPct:0 },
+      { id:'h1b', date: addDays(today(),-14), store:'Coral',         price:5.60, quantity:1, remainingPct:5  },
+      { id:'h1c', date: addDays(today(),-6),  store:'Supermaxi',     price:5.80, quantity:1, remainingPct:10 },
+    ],
+  },
+  {
+    id:'s2', name:'Royal Canin Perro 15kg', category:'mascotas', unit:'bolsa',
+    expiryDate: '',
+    notes:'',
+    prices: { Supermaxi:42.00, AKI:39.50 },
+    purchaseHistory: [
+      { id:'h2a', date: addDays(today(),-56), store:'Supermaxi', price:42.00, quantity:1, remainingPct:0 },
+      { id:'h2b', date: addDays(today(),-27), store:'AKI',       price:39.50, quantity:1, remainingPct:0 },
+    ],
+  },
+  {
+    id:'s3', name:'Arroz Diana 10lb', category:'abarrotes', unit:'bolsa',
+    expiryDate: '',
+    notes:'',
+    prices: { Coral:6.90, 'Mi Comisariato':7.20, AKI:6.75 },
+    purchaseHistory: [
+      { id:'h3a', date: addDays(today(),-58), store:'Mi Comisariato', price:7.20, quantity:1, remainingPct:0 },
+      { id:'h3b', date: addDays(today(),-28), store:'Coral',          price:6.90, quantity:1, remainingPct:0 },
+    ],
+  },
+];
+
+/* ─── STORAGE ─────────────────────────────────────────────────────────────── */
+function load() {
+  try {
+    const raw = localStorage.getItem('sc2_products');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return SEED;
+}
+function save(products) {
+  localStorage.setItem('sc2_products', JSON.stringify(products));
+}
+
+/* ─── PRIMITIVE UI ───────────────────────────────────────────────────────── */
+function Btn({ children, onClick, variant='primary', size='md', style:sx={}, disabled=false }) {
+  const [pressed, setPressed] = useState(false);
+  const base = {
+    display:'inline-flex', alignItems:'center', gap:6,
+    borderRadius: 'var(--r)', fontWeight:500, fontSize:13,
+    transition:'all var(--t)', cursor: disabled ? 'default' : 'pointer',
+    transform: pressed ? 'scale(0.98)' : 'scale(1)',
+    opacity: disabled ? 0.45 : 1,
+    border:'none', outline:'none',
+  };
+  const variants = {
+    primary: { background:'var(--indigo)', color:'#fff', padding: size==='sm' ? '5px 12px':'8px 16px' },
+    ghost:   { background:'transparent', color:'var(--muted)', border:'1px solid var(--border)', padding: size==='sm' ? '5px 12px':'8px 16px' },
+    danger:  { background:'transparent', color:'var(--danger)', border:'1px solid transparent', padding: size==='sm' ? '5px 12px':'8px 16px' },
+    confirm: { background:'var(--danger)', color:'#fff', padding: size==='sm' ? '5px 12px':'8px 16px' },
+    green:   { background:'transparent', color:'var(--success)', border:'1px solid var(--border)', padding: size==='sm' ? '5px 12px':'8px 16px' },
+  };
+  return (
+    <button disabled={disabled} onClick={onClick}
+      style={{ ...base, ...variants[variant], ...sx }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+    >{children}</button>
+  );
+}
+
+function Dot({ color }) {
+  return <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:color, flexShrink:0 }} />;
+}
+
+function Label({ children, style:sx={} }) {
+  return <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4, ...sx }}>{children}</div>;
+}
+
+function ThinLine({ value, max }) {
+  const [w, setW] = useState(0);
+  const pct = Math.min(100, max > 0 ? (value/max)*100 : 0);
+  useEffect(() => { const t = setTimeout(() => setW(pct), 60); return () => clearTimeout(t); }, [pct]);
+  return (
+    <div style={{ height:2, background:'var(--border)', borderRadius:99, overflow:'hidden' }}>
+      <div style={{ height:'100%', width:w+'%', background:'var(--indigo)', borderRadius:99, transition:'width 600ms cubic-bezier(.4,0,.2,1)' }} />
+    </div>
+  );
+}
+
+function NavBar({ view, onChange }) {
+  const nav = [
+    { id:'dashboard', icon:'◈',  label:'Dashboard' },
+    { id:'lista',     icon:'≡',  label:'Lista' },
+    { id:'precios',   icon:'$',  label:'Precios' },
+    { id:'agregar',   icon:'+',  label:'Agregar' },
+  ];
+  return (
+    <nav style={{
+      position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)',
+      width:'100%', maxWidth:800,
+      background:'var(--bg)',
+      display:'grid', gridTemplateColumns:'repeat(4,1fr)',
+      padding:'8px 8px 16px', zIndex:100,
+    }}>
+      {nav.map(n => {
+        const active = view === n.id;
+        return (
+          <button key={n.id} onClick={() => onChange(n.id)} style={{
+            display:'flex', flexDirection:'column', alignItems:'center', gap:4,
+            padding:'8px 4px', background:'none', border:'none', cursor:'pointer',
+            color: active ? 'var(--indigo)' : 'var(--muted)',
+            transition:'color var(--t)',
+            position:'relative',
+          }}>
+            <span style={{ fontSize:18, fontWeight:600, lineHeight:1, fontFamily:'monospace' }}>{n.icon}</span>
+            <span style={{ fontSize:11, fontWeight: active ? 600 : 400, letterSpacing:'0.02em' }}>{n.label}</span>
+            {active && (
+              <div style={{ position:'absolute', bottom:0, left:'50%', transform:'translateX(-50%)', width:20, height:2, background:'var(--indigo)', borderRadius:99 }} />
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Modal({ children, onClose, title, maxWidth=480 }) {
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{
+      position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200,
+      display:'flex', alignItems:'flex-end', justifyContent:'center', padding: '0 0 0 0',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background:'var(--card)', border:'1px solid var(--border)',
+        borderRadius:'12px 12px 0 0', width:'100%', maxWidth, maxHeight:'92vh',
+        overflow:'auto', padding:20,
+      }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <h3 style={{ fontSize:16 }}>{title}</h3>
+          <button onClick={onClose} style={{ color:'var(--muted)', fontSize:20, lineHeight:1, background:'none', border:'none', cursor:'pointer' }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Toggle({ value, onChange, labelOn='Sí', labelOff='No' }) {
+  return (
+    <div style={{ display:'flex', gap:0, border:'1px solid var(--border)', borderRadius:'var(--r)', overflow:'hidden', display:'inline-flex' }}>
+      {[true,false].map(v => (
+        <button key={String(v)} onClick={() => onChange(v)} style={{
+          padding:'7px 18px', fontSize:13, fontWeight:500,
+          background: value===v ? 'var(--indigo)' : 'transparent',
+          color: value===v ? '#fff' : 'var(--muted)',
+          border:'none', cursor:'pointer',
+          transition:'all var(--t)',
+        }}>{v ? labelOn : labelOff}</button>
+      ))}
+    </div>
+  );
+}
+
+/* ─── EXPIRY BADGE ───────────────────────────────────────────────────────── */
+function ExpiryBadge({ expiryDate }) {
+  if (!expiryDate) return null;
+  const days = daysFromToday(expiryDate);
+  let color, label, icon;
+  if (days < 0)      { color='var(--danger)';  icon='⚠️'; label=`Caducó hace ${Math.abs(days)}d`; }
+  else if (days<=7)  { color='var(--danger)';  icon='⚠️'; label=`Caduca en ${days}d`; }
+  else if (days<=15) { color='var(--warning)'; icon='';  label=`Caduca en ${days}d`; }
+  else               { color='var(--muted)';   icon='';  label=`Cad. ${fmtDateShort(expiryDate)}`; }
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color }}>
+      <Dot color={color} />{icon}{label}
+    </span>
+  );
+}
+
+/* ─── COUNTDOWN BADGE ────────────────────────────────────────────────────── */
+function CountdownBadge({ days }) {
+  if (days === null || days === undefined) return null;
+  let color = 'var(--success)', label;
+  if (days < 0)       { color='var(--danger)';  label=`hace ${Math.abs(days)}d`; }
+  else if (days === 0){ color='var(--danger)';  label='hoy'; }
+  else if (days <= 2) { color='var(--danger)';  label=`${days}d`; }
+  else if (days <= 5) { color='var(--warning)'; label=`${days}d`; }
+  else                { label=`${days}d`; }
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color }}>
+      <Dot color={color} />{label}
+    </span>
+  );
+}
+
+/* ─── NUEVA COMPRA MODAL ──────────────────────────────────────────────────── */
+function NuevaCompraModal({ product, onClose, onSave }) {
+  const [form, setForm] = useState({
+    date: today(),
+    store: STORES[0],
+    price: '',
+    quantity: '1',
+    hadRemaining: false,
+    remainingPct: 20,
+  });
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const lastHistory = product.purchaseHistory?.length
+    ? product.purchaseHistory[product.purchaseHistory.length-1]
+    : null;
+
+  const preview = useMemo(() => {
+    if (!lastHistory) return null;
+    const elapsed = daysDiff(lastHistory.date, form.date || today());
+    if (elapsed <= 0) return null;
+    const rPct = form.hadRemaining ? (form.remainingPct || 0) : 0;
+    let dur;
+    if (rPct <= 0) dur = elapsed;
+    else dur = elapsed * 100 / (100 - rPct);
+    return Math.round(dur);
+  }, [lastHistory, form.date, form.hadRemaining, form.remainingPct]);
+
+  const handleSave = () => {
+    const price = parseFloat(form.price);
+    const qty = parseFloat(form.quantity) || 1;
+    if (!form.date) return alert('Selecciona la fecha de compra.');
+    const entry = {
+      id: uid(),
+      date: form.date,
+      store: form.store,
+      price: isNaN(price) ? 0 : price,
+      quantity: qty,
+      remainingPct: form.hadRemaining ? (form.remainingPct || 0) : 0,
+    };
+    const newHistory = [...(product.purchaseHistory || []), entry];
+    const newPrices = { ...(product.prices || {}) };
+    if (!isNaN(price) && price > 0) newPrices[form.store] = price;
+    onSave({ ...product, purchaseHistory: newHistory, prices: newPrices });
+  };
+
+  return (
+    <Modal title={`🛒 Nueva Compra — ${product.name}`} onClose={onClose}>
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <div>
+          <Label>Fecha de compra</Label>
+          <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div>
+            <Label>Tienda</Label>
+            <select value={form.store} onChange={e => set('store', e.target.value)}>
+              {STORES.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label>Precio pagado ($)</Label>
+            <input type="number" min="0" step="0.01" placeholder="0.00"
+              value={form.price} onChange={e => set('price', e.target.value)} />
+          </div>
+        </div>
+        <div>
+          <Label>Cantidad comprada</Label>
+          <input type="number" min="0.01" step="0.01" value={form.quantity}
+            onChange={e => set('quantity', e.target.value)} />
+        </div>
+
+        {lastHistory && (
+          <>
+            <div>
+              <Label style={{ marginBottom:8 }}>¿Quedaba algo del anterior?</Label>
+              <Toggle value={form.hadRemaining} onChange={v => set('hadRemaining', v)} />
+            </div>
+            {form.hadRemaining && (
+              <div>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                  <Label style={{ marginBottom:0 }}>¿Qué % quedaba?</Label>
+                  <span style={{ fontSize:13, fontWeight:600, color:'var(--indigo)' }}>{form.remainingPct}%</span>
+                </div>
+                <input type="range" min="1" max="99" value={form.remainingPct}
+                  onChange={e => set('remainingPct', parseInt(e.target.value))} />
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--muted)', marginTop:3 }}>
+                  <span>1%</span><span>50%</span><span>99%</span>
+                </div>
+              </div>
+            )}
+            {preview !== null && (
+              <div style={{
+                background:'var(--surface)', border:'1px solid var(--border)',
+                borderRadius:'var(--r)', padding:'10px 12px', fontSize:12,
+              }}>
+                <span style={{ color:'var(--muted)' }}>Duración calculada para esta compra: </span>
+                <strong style={{ color:'var(--indigo)' }}>{preview} días</strong>
+              </div>
+            )}
+          </>
+        )}
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:4 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn variant="primary" onClick={handleSave}>Guardar compra</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─── DELETE MODAL ───────────────────────────────────────────────────────── */
+function DeleteModal({ product, onConfirm, onCancel }) {
+  if (!product) return null;
+  return (
+    <Modal title="Eliminar producto" onClose={onCancel} maxWidth={360}>
+      <p style={{ color:'var(--muted)', marginBottom:20 }}>
+        ¿Seguro que deseas eliminar <strong style={{ color:'var(--text)' }}>{product.name}</strong>?
+        Se perderá todo el historial de compras.
+      </p>
+      <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>
+        <Btn variant="confirm" onClick={() => onConfirm(product.id)}>Eliminar</Btn>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─── PRODUCT CARD ───────────────────────────────────────────────────────── */
+function ProductCard({ product, onEdit, onDelete, onNuevaCompra }) {
+  const [histOpen, setHistOpen] = useState(false);
+  const cat = getCat(product.category);
+  const h = product.purchaseHistory || [];
+  const dur = calcLearnedDuration(h);
+  const nextDate = getNextPurchaseDate(product);
+  const daysLeft = nextDate ? daysFromToday(nextDate) : null;
+  const monthly = monthlyEstimate(product);
+  const { best, worst } = getBestWorst(product.prices);
+  const sorted = [...h].reverse(); // newest first for display
+
+  return (
+    <div style={{
+      border:'1px solid var(--border)', borderRadius:10,
+      padding:14, marginBottom:10,
+    }}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
+        <div style={{ display:'flex', gap:10, alignItems:'flex-start', flex:1, minWidth:0 }}>
+          <span style={{ fontSize:22, flexShrink:0, marginTop:1 }}>{cat.emoji}</span>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:600, fontSize:14, lineHeight:1.4 }}>{product.name}</div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:1 }}>{cat.label} · {product.unit}</div>
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4, flexShrink:0 }}>
+          {nextDate && <CountdownBadge days={daysLeft} />}
+          {product.expiryDate && <ExpiryBadge expiryDate={product.expiryDate} />}
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:10 }}>
+        <div style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
+          <div style={{ fontSize:11, color:'var(--muted)' }}>Duración prom.</div>
+          <div style={{ fontWeight:600, marginTop:1 }}>
+            {dur ? `${dur}d` : <span style={{ color:'var(--dim)', fontSize:11 }}>aprendiendo…</span>}
+          </div>
+        </div>
+        <div style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
+          <div style={{ fontSize:11, color:'var(--muted)' }}>Mejor precio</div>
+          <div style={{ fontWeight:600, marginTop:1, color:'var(--success)' }}>
+            {best ? `$${best[1].toFixed(2)}` : '—'}
+          </div>
+        </div>
+        <div style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
+          <div style={{ fontSize:11, color:'var(--muted)' }}>Est. mensual</div>
+          <div style={{ fontWeight:600, marginTop:1, color:'var(--indigo)' }}>
+            {monthly ? `$${monthly.toFixed(2)}` : '—'}
+          </div>
+        </div>
+      </div>
+
+      {/* Purchase count + next date */}
+      <div style={{ fontSize:12, color:'var(--muted)', marginBottom:10, display:'flex', gap:16, flexWrap:'wrap' }}>
+        <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <Dot color={h.length >= 2 ? 'var(--success)' : 'var(--warning)'} />
+          {h.length === 0 ? 'Sin compras' : h.length === 1 ? '1 compra · aprendiendo' : `${h.length} compras registradas`}
+        </span>
+        {nextDate && (
+          <span>Próxima: {fmtDate(nextDate)}</span>
+        )}
+      </div>
+
+      {/* Action buttons */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+        <Btn variant="green" size="sm" onClick={() => onNuevaCompra(product)}>
+          🛒 Nueva Compra
+        </Btn>
+        <Btn variant="ghost" size="sm" onClick={() => setHistOpen(o => !o)}>
+          {histOpen ? '▲ Ocultar' : '▼ Historial'}
+          {h.length > 0 && <span style={{ background:'var(--border)', borderRadius:99, padding:'0 6px', fontSize:10 }}>{h.length}</span>}
+        </Btn>
+        <Btn variant="ghost" size="sm" onClick={() => onEdit(product)}>✏️</Btn>
+        <Btn variant="danger" size="sm" onClick={() => onDelete(product)}>🗑️</Btn>
+      </div>
+
+      {/* Purchase history */}
+      {histOpen && h.length > 0 && (
+        <div style={{ marginTop:12, borderTop:'1px solid var(--border)', paddingTop:12 }}>
+          {sorted.map((entry, idx) => {
+            const originalIdx = h.length - 1 - idx;
+            const prevEntry = originalIdx > 0 ? h[originalIdx-1] : null;
+            const elapsed = prevEntry ? daysDiff(prevEntry.date, entry.date) : null;
+            const calcDur = elapsed !== null
+              ? (entry.remainingPct > 0 ? Math.round(elapsed*100/(100-entry.remainingPct)) : elapsed)
+              : null;
+            return (
+              <div key={entry.id}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', padding:'6px 0', fontSize:12 }}>
+                  <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
+                    <span style={{ color:'var(--muted)', fontSize:14 }}>🛒</span>
+                    <div>
+                      <div style={{ fontWeight:500 }}>{fmtDateShort(entry.date)} · {entry.store}</div>
+                      <div style={{ color:'var(--muted)', marginTop:1 }}>
+                        {entry.quantity} {product.unit}
+                        {entry.price > 0 && ` · $${entry.price.toFixed(2)}`}
+                        {entry.remainingPct > 0 && <span style={{ color:'var(--warning)', marginLeft:6 }}>quedaba {entry.remainingPct}%</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {idx === 0 && h.length === 1 && (
+                    <span style={{ fontSize:11, color:'var(--muted)' }}>primera compra</span>
+                  )}
+                </div>
+                {prevEntry && calcDur !== null && (
+                  <div style={{ fontSize:11, color:'var(--muted)', paddingLeft:22, paddingBottom:4 }}>
+                    ↕ duró {calcDur} días
+                  </div>
+                )}
+                {idx < sorted.length - 1 && (
+                  <div style={{ height:1, background:'var(--border)', margin:'2px 0' }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── DASHBOARD ──────────────────────────────────────────────────────────── */
+function Dashboard({ products, onNuevaCompra, onEdit }) {
+  const totalMonthly = useMemo(() =>
+    products.reduce((s,p) => s + (monthlyEstimate(p)||0), 0), [products]);
+
+  const urgent = useMemo(() => products.filter(p => {
+    const next = getNextPurchaseDate(p);
+    if (!next) return false;
+    return daysFromToday(next) <= 5;
+  }).sort((a,b) => daysFromToday(getNextPurchaseDate(a)) - daysFromToday(getNextPurchaseDate(b))), [products]);
+
+  const expiring = useMemo(() => products.filter(p => {
+    if (!p.expiryDate) return false;
+    return daysFromToday(p.expiryDate) <= 15;
+  }), [products]);
+
+  const byCat = useMemo(() => {
+    const m = {};
+    products.forEach(p => { const v = monthlyEstimate(p)||0; m[p.category]=(m[p.category]||0)+v; });
+    return Object.entries(m).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  }, [products]);
+  const maxCat = byCat.length ? byCat[0][1] : 1;
+
+  return (
+    <div style={{ padding:'20px 16px 100px' }}>
+      <div style={{ marginBottom:24 }}>
+        <h2 style={{ fontSize:20, marginBottom:3 }}>Dashboard</h2>
+        <div style={{ fontSize:12, color:'var(--muted)' }}>{products.length} productos · actualizado hoy</div>
+      </div>
+
+      {/* Top stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:24 }}>
+        {[
+          { label:'Gasto mensual est.', value:`$${totalMonthly.toFixed(2)}`, sub:'al mejor precio', dot:'var(--indigo)' },
+          { label:'Compras urgentes', value:urgent.length, sub:'próximos 5 días', dot: urgent.length>0?'var(--warning)':'var(--success)' },
+          { label:'Productos', value:products.length, sub:'registrados', dot:'var(--muted)' },
+          { label:'Por vencer', value:expiring.length, sub:'próximos 15 días', dot: expiring.length>0?'var(--warning)':'var(--muted)' },
+        ].map(s => (
+          <div key={s.label} style={{ border:'1px solid var(--border)', borderRadius:10, padding:14 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+              <Dot color={s.dot} />
+              <span style={{ fontSize:11, color:'var(--muted)' }}>{s.label}</span>
+            </div>
+            <div style={{ fontSize:22, fontWeight:600, fontFamily:"'Space Grotesk',sans-serif", lineHeight:1 }}>{s.value}</div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Urgent */}
+      {urgent.length > 0 && (
+        <div style={{ marginBottom:28 }}>
+          <div style={{ fontSize:12, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
+            Comprar pronto
+          </div>
+          {urgent.map(p => {
+            const cat = getCat(p.category);
+            const next = getNextPurchaseDate(p);
+            const days = daysFromToday(next);
+            return (
+              <div key={p.id} onClick={() => onEdit(p)}
+                style={{ border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', marginBottom:8, cursor:'pointer',
+                  borderColor: days<=2 ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <span>{cat.emoji}</span>
+                    <span style={{ fontWeight:500, fontSize:13 }}>{p.name}</span>
+                  </div>
+                  <CountdownBadge days={days} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Category breakdown */}
+      {byCat.length > 0 && (
+        <div>
+          <div style={{ fontSize:12, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:14 }}>
+            Gasto por categoría / mes
+          </div>
+          {byCat.map(([catId, total]) => {
+            const cat = getCat(catId);
+            return (
+              <div key={catId} style={{ marginBottom:14 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
+                  <span>{cat.emoji} {cat.label}</span>
+                  <span style={{ fontWeight:600, color:'var(--text)' }}>${total.toFixed(2)}</span>
+                </div>
+                <ThinLine value={total} max={maxCat} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── LISTA ──────────────────────────────────────────────────────────────── */
+function Lista({ products, onEdit, onDelete, onNuevaCompra }) {
+  const [filterCat, setFilterCat] = useState('all');
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() =>
+    products.filter(p => {
+      const okCat = filterCat === 'all' || p.category === filterCat;
+      const okSearch = p.name.toLowerCase().includes(search.toLowerCase());
+      return okCat && okSearch;
+    }), [products, filterCat, search]);
+
+  return (
+    <div style={{ padding:'20px 16px 100px' }}>
+      <div style={{ marginBottom:16 }}>
+        <h2 style={{ fontSize:20, marginBottom:12 }}>Lista</h2>
+        <input type="text" placeholder="Buscar producto…"
+          value={search} onChange={e => setSearch(e.target.value)}
+          style={{ marginBottom:10 }} />
+        <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4 }}>
+          <button onClick={() => setFilterCat('all')} style={{
+            ...btnStyle(filterCat==='all'), whiteSpace:'nowrap', flexShrink:0,
+          }}>Todos</button>
+          {CATEGORIES.map(c => (
+            <button key={c.id} onClick={() => setFilterCat(c.id)} style={{
+              ...btnStyle(filterCat===c.id), whiteSpace:'nowrap', flexShrink:0,
+            }}>{c.emoji} {c.label}</button>
+          ))}
+        </div>
+      </div>
+      {filtered.length === 0 && (
+        <div style={{ textAlign:'center', padding:'48px 0', color:'var(--muted)' }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>—</div>
+          <div>Sin resultados</div>
+        </div>
+      )}
+      {filtered.map(p => (
+        <ProductCard key={p.id} product={p}
+          onEdit={onEdit} onDelete={onDelete} onNuevaCompra={onNuevaCompra} />
+      ))}
+    </div>
+  );
+}
+
+function btnStyle(active) {
+  return {
+    padding:'5px 12px', fontSize:12, fontWeight: active ? 600 : 400,
+    background: active ? 'var(--indigo)' : 'transparent',
+    color: active ? '#fff' : 'var(--muted)',
+    border: active ? 'none' : '1px solid var(--border)',
+    borderRadius:6, cursor:'pointer', transition:'all var(--t)',
+  };
+}
+
+/* ─── PRECIOS ─────────────────────────────────────────────────────────────── */
+function Precios({ products }) {
+  const [filterCat, setFilterCat] = useState('all');
+
+  const filtered = useMemo(() =>
+    filterCat==='all' ? products : products.filter(p => p.category===filterCat), [products, filterCat]);
+
+  const grouped = useMemo(() => {
+    const m = {};
+    filtered.forEach(p => { if(!m[p.category]) m[p.category]=[]; m[p.category].push(p); });
+    return Object.entries(m);
+  }, [filtered]);
+
+  return (
+    <div style={{ padding:'20px 16px 100px' }}>
+      <h2 style={{ fontSize:20, marginBottom:14 }}>Precios</h2>
+      <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:10, marginBottom:16 }}>
+        <button onClick={() => setFilterCat('all')} style={{ ...btnStyle(filterCat==='all'), whiteSpace:'nowrap', flexShrink:0 }}>Todos</button>
+        {CATEGORIES.map(c => (
+          <button key={c.id} onClick={() => setFilterCat(c.id)} style={{ ...btnStyle(filterCat===c.id), whiteSpace:'nowrap', flexShrink:0 }}>
+            {c.emoji} {c.label}
+          </button>
+        ))}
+      </div>
+
+      {grouped.length === 0 && (
+        <div style={{ textAlign:'center', padding:'48px 0', color:'var(--muted)' }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>—</div>
+          Sin precios registrados.
+        </div>
+      )}
+
+      {grouped.map(([catId, prods]) => {
+        const cat = getCat(catId);
+        return (
+          <div key={catId} style={{ marginBottom:28 }}>
+            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>
+              {cat.emoji} {cat.label}
+            </div>
+            {prods.map(p => {
+              const entries = Object.entries(p.prices||{}).filter(([,v])=>v>0).sort((a,b)=>a[1]-b[1]);
+              if (!entries.length) return null;
+              const bestVal = entries[0][1];
+              const worstVal = entries[entries.length-1][1];
+              const savings = worstVal - bestVal;
+              return (
+                <div key={p.id} style={{ border:'1px solid var(--border)', borderRadius:10, padding:'12px 14px', marginBottom:8 }}>
+                  <div style={{ fontWeight:600, fontSize:13, marginBottom:10 }}>{p.name}
+                    <span style={{ fontSize:11, color:'var(--muted)', fontWeight:400, marginLeft:6 }}>/ {p.unit}</span>
+                  </div>
+                  {entries.map(([store, price]) => {
+                    const isBest = price === bestVal;
+                    const isWorst = price === worstVal && entries.length > 1;
+                    return (
+                      <div key={store} style={{
+                        display:'flex', justifyContent:'space-between', alignItems:'center',
+                        padding:'7px 10px', borderRadius:6, marginBottom:3,
+                        background: isBest ? 'rgba(34,197,94,0.05)' : isWorst ? 'rgba(239,68,68,0.05)' : 'var(--surface)',
+                        border: `1px solid ${isBest ? 'rgba(34,197,94,0.15)' : isWorst ? 'rgba(239,68,68,0.15)' : 'transparent'}`,
+                      }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
+                          <Dot color={isBest ? 'var(--success)' : isWorst ? 'var(--danger)' : 'var(--dim)'} />
+                          {store}
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <span style={{
+                            fontWeight:600, fontSize:14,
+                            color: isBest ? 'var(--success)' : isWorst ? 'var(--danger)' : 'var(--text)',
+                          }}>${price.toFixed(2)}</span>
+                          {isWorst && savings>0.005 && (
+                            <span style={{ fontSize:11, color:'var(--danger)' }}>+${savings.toFixed(2)}</span>
+                          )}
+                          {isBest && entries.length>1 && (
+                            <span style={{ fontSize:11, color:'var(--success)' }}>mejor</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {savings > 0.005 && (
+                    <div style={{ marginTop:8, fontSize:11, color:'var(--muted)', textAlign:'right' }}>
+                      Ahorro posible <strong style={{ color:'var(--success)' }}>${savings.toFixed(2)}</strong> comprando en {entries[0][0]}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── AGREGAR / EDIT FORM ─────────────────────────────────────────────────── */
+const EMPTY_FORM = {
+  name:'', category:'abarrotes', unit:'unidad', expiryDate:'', notes:'',
+  // first purchase fields
+  purchaseDate: today(),
+  store: STORES[0],
+  price: '',
+  quantity: '1',
+};
+
+function Agregar({ editTarget, onSave, onCancel, isEditMode }) {
+  const [form, setForm] = useState(() => {
+    if (editTarget) {
+      const last = editTarget.purchaseHistory?.[editTarget.purchaseHistory.length-1];
+      return {
+        ...EMPTY_FORM,
+        name: editTarget.name || '',
+        category: editTarget.category || 'abarrotes',
+        unit: editTarget.unit || 'unidad',
+        expiryDate: editTarget.expiryDate || '',
+        notes: editTarget.notes || '',
+        purchaseDate: last?.date || today(),
+        store: last?.store || STORES[0],
+        price: last?.price ? String(last.price) : '',
+        quantity: last?.quantity ? String(last.quantity) : '1',
+      };
+    }
+    return { ...EMPTY_FORM };
+  });
+
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+
+  const handleSave = () => {
+    if (!form.name.trim()) return alert('El nombre del producto es requerido.');
+    const price = parseFloat(form.price);
+    const qty = parseFloat(form.quantity) || 1;
+
+    let history = editTarget?.purchaseHistory || [];
+    let prices = editTarget?.prices || {};
+
+    if (!isEditMode) {
+      // new product — record first purchase
+      const entry = {
+        id: uid(),
+        date: form.purchaseDate,
+        store: form.store,
+        price: isNaN(price) ? 0 : price,
+        quantity: qty,
+        remainingPct: 0,
+      };
+      history = [entry];
+      if (!isNaN(price) && price > 0) prices = { ...prices, [form.store]: price };
+    }
+
+    const product = {
+      id: editTarget?.id || uid(),
+      name: form.name.trim(),
+      category: form.category,
+      unit: form.unit,
+      expiryDate: form.expiryDate || '',
+      notes: form.notes,
+      prices,
+      purchaseHistory: history,
+    };
+    onSave(product);
+  };
+
+  const fStyle = { marginBottom:12 };
+
+  return (
+    <div style={{ padding:'20px 16px 100px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+        <h2 style={{ fontSize:20 }}>{isEditMode ? 'Editar producto' : 'Nuevo producto'}</h2>
+        {isEditMode && <Btn variant="ghost" size="sm" onClick={onCancel}>← Volver</Btn>}
+      </div>
+
+      {/* Product info */}
+      <div style={{ border:'1px solid var(--border)', borderRadius:10, padding:14, marginBottom:14 }}>
+        <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
+          Información del producto
+        </div>
+
+        <Label>Nombre *</Label>
+        <input style={fStyle} value={form.name} onChange={e => set('name',e.target.value)} placeholder="Ej: Leche La Lechera 1lt x6" />
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+          <div>
+            <Label>Categoría</Label>
+            <select value={form.category} onChange={e => set('category',e.target.value)}>
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label>Unidad</Label>
+            <select value={form.unit} onChange={e => set('unit',e.target.value)}>
+              {UNITS.map(u => <option key={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <Label>Fecha de caducidad (opcional)</Label>
+        <input type="date" style={fStyle} value={form.expiryDate} onChange={e => set('expiryDate',e.target.value)} />
+
+        <Label>Notas</Label>
+        <textarea rows={2} style={{ ...fStyle, resize:'vertical' }}
+          value={form.notes} onChange={e => set('notes',e.target.value)}
+          placeholder="Observaciones…" />
+      </div>
+
+      {/* First purchase — only for new products */}
+      {!isEditMode && (
+        <div style={{ border:'1px solid var(--border)', borderRadius:10, padding:14, marginBottom:14 }}>
+          <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
+            Primera compra
+          </div>
+          <Label>Fecha de compra</Label>
+          <input type="date" style={fStyle} value={form.purchaseDate} onChange={e => set('purchaseDate',e.target.value)} />
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+            <div>
+              <Label>Tienda</Label>
+              <select value={form.store} onChange={e => set('store',e.target.value)}>
+                {STORES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Precio ($)</Label>
+              <input type="number" min="0" step="0.01" placeholder="0.00"
+                value={form.price} onChange={e => set('price',e.target.value)} />
+            </div>
+          </div>
+          <Label>Cantidad</Label>
+          <input type="number" min="0.01" step="0.01" style={fStyle}
+            value={form.quantity} onChange={e => set('quantity',e.target.value)} />
+          <div style={{ fontSize:12, color:'var(--muted)', marginTop:4, padding:'10px 12px', background:'var(--surface)', borderRadius:6 }}>
+            💡 Después de tu segunda compra, la app aprenderá la duración automáticamente.
+          </div>
+        </div>
+      )}
+
+      {/* Edit info note */}
+      {isEditMode && (
+        <div style={{ fontSize:12, color:'var(--muted)', padding:'10px 12px', background:'var(--surface)', borderRadius:6, marginBottom:14 }}>
+          Para registrar una nueva compra, usa el botón <strong style={{ color:'var(--success)' }}>🛒 Nueva Compra</strong> en la tarjeta del producto.
+        </div>
+      )}
+
+      <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+        {isEditMode && <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>}
+        <Btn variant="primary" onClick={handleSave}>
+          {isEditMode ? 'Guardar cambios' : 'Agregar producto'}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+/* ─── APP ─────────────────────────────────────────────────────────────────── */
+function App() {
+  const [view, setView] = useState('dashboard');
+  const [products, setProducts] = useState(load);
+  const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [nuevaCompraTarget, setNuevaCompraTarget] = useState(null);
+
+  useEffect(() => { save(products); }, [products]);
+
+  const handleSave = useCallback((product) => {
+    setProducts(ps => {
+      const idx = ps.findIndex(p => p.id === product.id);
+      if (idx >= 0) { const n=[...ps]; n[idx]=product; return n; }
+      return [product, ...ps];
+    });
+    setEditTarget(null);
+    setView('lista');
+  }, []);
+
+  const handleEdit = useCallback((product) => {
+    setEditTarget(product);
+    setView('agregar');
+  }, []);
+
+  const handleDeleteRequest = useCallback((product) => {
+    setDeleteTarget(product);
+  }, []);
+
+  const handleDelete = useCallback((id) => {
+    setProducts(ps => ps.filter(p => p.id !== id));
+    setDeleteTarget(null);
+  }, []);
+
+  const handleNuevaCompraSave = useCallback((updated) => {
+    setProducts(ps => ps.map(p => p.id === updated.id ? updated : p));
+    setNuevaCompraTarget(null);
+  }, []);
+
+  const handleNavChange = (v) => {
+    if (v !== 'agregar') setEditTarget(null);
+    setView(v);
+  };
+
+  return (
+    <>
+      <div style={{ maxWidth:800, margin:'0 auto', minHeight:'100vh' }}>
+        {/* Header */}
+        <header style={{
+          padding:'18px 16px 14px',
+          borderBottom:'1px solid var(--border)',
+          display:'flex', alignItems:'center', gap:10,
+        }}>
+          <span style={{ fontSize:20 }}>🛒</span>
+          <div>
+            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:16, lineHeight:1.2 }}>SmartCompras</div>
+            <div style={{ fontSize:11, color:'var(--muted)' }}>gestión del hogar</div>
+          </div>
+        </header>
+
+        {view === 'dashboard' && (
+          <Dashboard products={products} onNuevaCompra={setNuevaCompraTarget} onEdit={handleEdit} />
+        )}
+        {view === 'lista' && (
+          <Lista products={products} onEdit={handleEdit} onDelete={handleDeleteRequest} onNuevaCompra={setNuevaCompraTarget} />
+        )}
+        {view === 'precios' && (
+          <Precios products={products} />
+        )}
+        {view === 'agregar' && (
+          <Agregar
+            editTarget={editTarget}
+            isEditMode={!!editTarget}
+            onSave={handleSave}
+            onCancel={() => { setEditTarget(null); setView('lista'); }}
+          />
+        )}
+
+        <NavBar view={view} onChange={handleNavChange} />
+      </div>
+
+      {/* Modals */}
+      {nuevaCompraTarget && (
+        <NuevaCompraModal
+          product={nuevaCompraTarget}
+          onClose={() => setNuevaCompraTarget(null)}
+          onSave={handleNuevaCompraSave}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteModal
+          product={deleteTarget}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
