@@ -13,42 +13,35 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:       #09090b;
-      --card:     #111113;
-      --border:   #27272a;
-      --surface:  #18181b;
-      --text:     #fafafa;
-      --muted:    #71717a;
-      --dim:      #3f3f46;
-      --indigo:   #6366f1;
-      --success:  #22c55e;
-      --warning:  #f59e0b;
-      --danger:   #ef4444;
+      --bg:      #09090b;
+      --card:    #111113;
+      --border:  #27272a;
+      --surface: #18181b;
+      --text:    #fafafa;
+      --muted:   #71717a;
+      --dim:     #3f3f46;
+      --indigo:  #6366f1;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger:  #ef4444;
+      --amber:   #f59e0b;
       --r: 8px;
       --t: 150ms ease;
     }
     html, body { height: 100%; }
     body {
       font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
-      font-weight: 400;
-      line-height: 1.6;
-      background: var(--bg);
-      color: var(--text);
+      font-size: 13px; font-weight: 400; line-height: 1.6;
+      background: var(--bg); color: var(--text);
       -webkit-font-smoothing: antialiased;
     }
     h1,h2,h3,h4,h5,h6 { font-family: 'Space Grotesk', sans-serif; font-weight: 600; }
     #root { min-height: 100vh; }
     input, select, textarea {
-      font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: var(--r);
-      padding: 9px 12px;
-      outline: none;
-      width: 100%;
+      font-family: 'DM Sans', sans-serif; font-size: 13px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); border-radius: var(--r);
+      padding: 9px 12px; outline: none; width: 100%;
       transition: border-color var(--t);
     }
     input:focus, select:focus, textarea:focus { border-color: var(--indigo); }
@@ -74,9 +67,11 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useMemo, useEffect, useCallback, useRef } = React;
+const { useState, useMemo, useEffect, useCallback } = React;
 
-/* ─── CONSTANTS ─────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════════════════════ */
 const CATEGORIES = [
   { id:'mascotas',  label:'Mascotas',         emoji:'🐾' },
   { id:'verduras',  label:'Verduras y Frutas', emoji:'🥦' },
@@ -90,11 +85,24 @@ const CATEGORIES = [
   { id:'otros',     label:'Otros',             emoji:'📦' },
 ];
 const STORES = ['Supermaxi','Coral','El Arándano','AKI','Mi Comisariato','Otro'];
-const UNITS   = ['unidad','kg','g','litro','ml','paquete','caja','bolsa','docena','lb'];
+const UNITS  = ['unidad','kg','g','litro','ml','paquete','caja','bolsa','docena','lb'];
 
-/* ─── HELPERS ────────────────────────────────────────────────────────────── */
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-const today = () => new Date().toISOString().split('T')[0];
+const PLACE_CATS = [
+  { id:'fastfood',   label:'Fast Food',        emoji:'🍔' },
+  { id:'restaurant', label:'Restaurante',       emoji:'🍽️' },
+  { id:'street',     label:'Comida callejera',  emoji:'🌮' },
+  { id:'cafe',       label:'Cafetería',         emoji:'☕' },
+  { id:'pizza',      label:'Pizzería',          emoji:'🍕' },
+  { id:'asian',      label:'Asiático',          emoji:'🍜' },
+  { id:'delivery',   label:'Delivery',          emoji:'🛵' },
+  { id:'other',      label:'Otro',              emoji:'🏪' },
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════ */
+const uid    = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const today  = () => new Date().toISOString().split('T')[0];
 
 function daysDiff(d1, d2) {
   const a = new Date(d1 + 'T12:00:00'), b = new Date(d2 + 'T12:00:00');
@@ -105,57 +113,53 @@ function addDays(dateStr, n) {
   d.setDate(d.getDate() + Math.round(n));
   return d.toISOString().split('T')[0];
 }
-function daysFromToday(dateStr) {
-  return daysDiff(today(), dateStr);
-}
+function daysFromToday(dateStr) { return daysDiff(today(), dateStr); }
 function fmtDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-EC', { day:'2-digit', month:'short', year:'numeric' });
 }
 function fmtDateShort(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-EC', { day:'2-digit', month:'short' });
 }
+function isThisMonth(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00'), n = new Date();
+  return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+}
+function isLast30Days(dateStr) {
+  const diff = daysDiff(dateStr, today());
+  return diff >= 0 && diff <= 30;
+}
 
+// Products helpers
 function calcLearnedDuration(history) {
-  // history sorted oldest → newest
   if (!history || history.length < 2) return null;
   const intervals = [];
   for (let i = 1; i < history.length; i++) {
     const elapsed = daysDiff(history[i-1].date, history[i].date);
     const rPct = history[i].remainingPct || 0;
-    let dur;
-    if (rPct <= 0) {
-      dur = elapsed;
-    } else {
-      // consumed (100-rPct)% in elapsed days → full batch = elapsed * 100/(100-rPct)
-      dur = elapsed * 100 / (100 - rPct);
-    }
+    const dur = rPct <= 0 ? elapsed : elapsed * 100 / (100 - rPct);
     if (dur > 0) intervals.push(dur);
   }
   if (!intervals.length) return null;
   return Math.round(intervals.reduce((a,b) => a+b,0) / intervals.length);
 }
-
 function getNextPurchaseDate(product) {
   const h = product.purchaseHistory;
-  if (!h || !h.length) return null;
+  if (!h?.length) return null;
   const dur = calcLearnedDuration(h);
   if (!dur) return null;
-  const last = h[h.length-1];
-  return addDays(last.date, dur);
+  return addDays(h[h.length-1].date, dur);
 }
-
 function monthlyEstimate(product) {
   const dur = calcLearnedDuration(product.purchaseHistory);
   if (!dur || dur <= 0) return null;
   const h = product.purchaseHistory;
-  if (!h || !h.length) return null;
+  if (!h?.length) return null;
   const price = h[h.length-1].price;
   if (!price) return null;
   return price * (30 / dur);
 }
-
 function getCat(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[9]; }
-
+function getPlaceCat(id) { return PLACE_CATS.find(c => c.id === id) || PLACE_CATS[7]; }
 function getBestWorst(prices) {
   const entries = Object.entries(prices || {}).filter(([,v]) => v > 0);
   if (!entries.length) return { best:null, worst:null };
@@ -163,129 +167,201 @@ function getBestWorst(prices) {
   return { best: entries[0], worst: entries[entries.length-1] };
 }
 
-/* ─── SEED DATA ──────────────────────────────────────────────────────────── */
-const SEED = [
+// Places helpers
+function avgRating(orders) {
+  const rated = (orders || []).filter(o => o.rating > 0);
+  if (!rated.length) return 0;
+  return rated.reduce((s,o) => s + o.rating, 0) / rated.length;
+}
+function spentThisMonth(orders) {
+  return (orders || []).filter(o => isThisMonth(o.date)).reduce((s,o) => s + (o.total||0), 0);
+}
+function spentLast30(orders) {
+  return (orders || []).filter(o => isLast30Days(o.date)).reduce((s,o) => s + (o.total||0), 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SEED DATA
+═══════════════════════════════════════════════════════════════ */
+const SEED_PRODUCTS = [
   {
     id:'s1', name:'Leche La Lechera 1lt x6', category:'lacteos', unit:'pack',
-    expiryDate: addDays(today(), 12),
-    notes:'',
+    expiryDate: addDays(today(), 12), notes:'',
     prices: { Supermaxi:5.80, Coral:5.60, 'El Arándano':5.95 },
     purchaseHistory: [
-      { id:'h1a', date: addDays(today(),-21), store:'Supermaxi',     price:5.80, quantity:1, remainingPct:0 },
-      { id:'h1b', date: addDays(today(),-14), store:'Coral',         price:5.60, quantity:1, remainingPct:5  },
-      { id:'h1c', date: addDays(today(),-6),  store:'Supermaxi',     price:5.80, quantity:1, remainingPct:10 },
+      { id:'h1a', date:addDays(today(),-21), store:'Supermaxi',  price:5.80, quantity:1, remainingPct:0  },
+      { id:'h1b', date:addDays(today(),-14), store:'Coral',      price:5.60, quantity:1, remainingPct:5  },
+      { id:'h1c', date:addDays(today(),-6),  store:'Supermaxi',  price:5.80, quantity:1, remainingPct:10 },
     ],
   },
   {
     id:'s2', name:'Royal Canin Perro 15kg', category:'mascotas', unit:'bolsa',
-    expiryDate: '',
-    notes:'',
+    expiryDate:'', notes:'',
     prices: { Supermaxi:42.00, AKI:39.50 },
     purchaseHistory: [
-      { id:'h2a', date: addDays(today(),-56), store:'Supermaxi', price:42.00, quantity:1, remainingPct:0 },
-      { id:'h2b', date: addDays(today(),-27), store:'AKI',       price:39.50, quantity:1, remainingPct:0 },
+      { id:'h2a', date:addDays(today(),-56), store:'Supermaxi', price:42.00, quantity:1, remainingPct:0 },
+      { id:'h2b', date:addDays(today(),-27), store:'AKI',       price:39.50, quantity:1, remainingPct:0 },
     ],
   },
   {
     id:'s3', name:'Arroz Diana 10lb', category:'abarrotes', unit:'bolsa',
-    expiryDate: '',
-    notes:'',
+    expiryDate:'', notes:'',
     prices: { Coral:6.90, 'Mi Comisariato':7.20, AKI:6.75 },
     purchaseHistory: [
-      { id:'h3a', date: addDays(today(),-58), store:'Mi Comisariato', price:7.20, quantity:1, remainingPct:0 },
-      { id:'h3b', date: addDays(today(),-28), store:'Coral',          price:6.90, quantity:1, remainingPct:0 },
+      { id:'h3a', date:addDays(today(),-58), store:'Mi Comisariato', price:7.20, quantity:1, remainingPct:0 },
+      { id:'h3b', date:addDays(today(),-28), store:'Coral',          price:6.90, quantity:1, remainingPct:0 },
     ],
   },
 ];
 
-/* ─── STORAGE ─────────────────────────────────────────────────────────────── */
-function load() {
-  try {
-    const raw = localStorage.getItem('sc2_products');
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return SEED;
-}
-function save(products) {
-  localStorage.setItem('sc2_products', JSON.stringify(products));
-}
+const SEED_PLACES = [
+  {
+    id:'p1', name:'KFC', placeCategory:'fastfood',
+    orders: [
+      { id:'o1a', date:addDays(today(),-25), total:8.50,  rating:4, notes:'Combo personal' },
+      { id:'o1b', date:addDays(today(),-12), total:14.20, rating:3, notes:'Familiar con 3 personas' },
+      { id:'o1c', date:addDays(today(),-4),  total:9.00,  rating:4, notes:'Combo doble' },
+    ],
+  },
+  {
+    id:'p2', name:'La Choza del Sabor', placeCategory:'street',
+    orders: [
+      { id:'o2a', date:addDays(today(),-20), total:4.50, rating:5, notes:'Hornado, excelente' },
+      { id:'o2b', date:addDays(today(),-7),  total:5.00, rating:5, notes:'Seco de pollo' },
+    ],
+  },
+  {
+    id:'p3', name:'Pizza Hut', placeCategory:'pizza',
+    orders: [
+      { id:'o3a', date:addDays(today(),-30), total:18.00, rating:3, notes:'Pizza mediana pepperoni' },
+      { id:'o3b', date:addDays(today(),-11), total:22.50, rating:4, notes:'Combo familiar viernes' },
+    ],
+  },
+];
 
-/* ─── PRIMITIVE UI ───────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   STORAGE
+═══════════════════════════════════════════════════════════════ */
+function loadProducts() {
+  try { const r = localStorage.getItem('sc2_products'); if (r) return JSON.parse(r); } catch {}
+  return SEED_PRODUCTS;
+}
+function saveProducts(p) { localStorage.setItem('sc2_products', JSON.stringify(p)); }
+
+function loadPlaces() {
+  try { const r = localStorage.getItem('sc2_places'); if (r) return JSON.parse(r); } catch {}
+  return SEED_PLACES;
+}
+function savePlaces(p) { localStorage.setItem('sc2_places', JSON.stringify(p)); }
+
+/* ═══════════════════════════════════════════════════════════════
+   PRIMITIVE COMPONENTS
+═══════════════════════════════════════════════════════════════ */
 function Btn({ children, onClick, variant='primary', size='md', style:sx={}, disabled=false }) {
   const [pressed, setPressed] = useState(false);
-  const base = {
-    display:'inline-flex', alignItems:'center', gap:6,
-    borderRadius: 'var(--r)', fontWeight:500, fontSize:13,
-    transition:'all var(--t)', cursor: disabled ? 'default' : 'pointer',
-    transform: pressed ? 'scale(0.98)' : 'scale(1)',
-    opacity: disabled ? 0.45 : 1,
-    border:'none', outline:'none',
-  };
-  const variants = {
-    primary: { background:'var(--indigo)', color:'#fff', padding: size==='sm' ? '5px 12px':'8px 16px' },
-    ghost:   { background:'transparent', color:'var(--muted)', border:'1px solid var(--border)', padding: size==='sm' ? '5px 12px':'8px 16px' },
-    danger:  { background:'transparent', color:'var(--danger)', border:'1px solid transparent', padding: size==='sm' ? '5px 12px':'8px 16px' },
-    confirm: { background:'var(--danger)', color:'#fff', padding: size==='sm' ? '5px 12px':'8px 16px' },
-    green:   { background:'transparent', color:'var(--success)', border:'1px solid var(--border)', padding: size==='sm' ? '5px 12px':'8px 16px' },
+  const pads = { sm:'5px 12px', md:'8px 16px', lg:'10px 22px' };
+  const vs = {
+    primary: { background:'var(--indigo)', color:'#fff', border:'none' },
+    ghost:   { background:'transparent', color:'var(--muted)', border:'1px solid var(--border)' },
+    danger:  { background:'transparent', color:'var(--danger)', border:'1px solid transparent' },
+    confirm: { background:'var(--danger)', color:'#fff', border:'none' },
+    green:   { background:'transparent', color:'var(--success)', border:'1px solid var(--border)' },
+    amber:   { background:'transparent', color:'var(--amber)', border:'1px solid var(--border)' },
   };
   return (
     <button disabled={disabled} onClick={onClick}
-      style={{ ...base, ...variants[variant], ...sx }}
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
       onMouseLeave={() => setPressed(false)}
+      style={{
+        display:'inline-flex', alignItems:'center', gap:6,
+        borderRadius:'var(--r)', fontWeight:500, fontSize:13,
+        padding: pads[size] || pads.md,
+        transition:'all var(--t)', cursor: disabled ? 'default' : 'pointer',
+        transform: pressed ? 'scale(0.98)' : 'scale(1)',
+        opacity: disabled ? 0.45 : 1,
+        ...vs[variant], ...sx,
+      }}
     >{children}</button>
   );
 }
 
-function Dot({ color }) {
-  return <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:color, flexShrink:0 }} />;
+function Dot({ color, size=6 }) {
+  return <span style={{ display:'inline-block', width:size, height:size, borderRadius:'50%', background:color, flexShrink:0 }} />;
 }
 
 function Label({ children, style:sx={} }) {
   return <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4, ...sx }}>{children}</div>;
 }
 
-function ThinLine({ value, max }) {
+function ThinLine({ value, max, color='var(--indigo)' }) {
   const [w, setW] = useState(0);
   const pct = Math.min(100, max > 0 ? (value/max)*100 : 0);
   useEffect(() => { const t = setTimeout(() => setW(pct), 60); return () => clearTimeout(t); }, [pct]);
   return (
     <div style={{ height:2, background:'var(--border)', borderRadius:99, overflow:'hidden' }}>
-      <div style={{ height:'100%', width:w+'%', background:'var(--indigo)', borderRadius:99, transition:'width 600ms cubic-bezier(.4,0,.2,1)' }} />
+      <div style={{ height:'100%', width:w+'%', background:color, borderRadius:99, transition:'width 600ms cubic-bezier(.4,0,.2,1)' }} />
     </div>
   );
 }
 
+function Divider() {
+  return <div style={{ height:1, background:'var(--border)', margin:'6px 0' }} />;
+}
+
+function StarRating({ value=0, onChange, readOnly=false, size=16 }) {
+  const [hover, setHover] = useState(0);
+  const display = hover || value;
+  return (
+    <div style={{ display:'flex', gap:1 }}>
+      {[1,2,3,4,5].map(i => (
+        <button key={i}
+          onClick={() => !readOnly && onChange?.(i)}
+          onMouseEnter={() => !readOnly && setHover(i)}
+          onMouseLeave={() => !readOnly && setHover(0)}
+          style={{
+            background:'none', border:'none',
+            cursor: readOnly ? 'default' : 'pointer',
+            color: i <= display ? 'var(--amber)' : 'var(--dim)',
+            fontSize: size, padding:'0 1px', lineHeight:1,
+            transition:'color var(--t)',
+          }}>★</button>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NAV BAR (5 items)
+═══════════════════════════════════════════════════════════════ */
 function NavBar({ view, onChange }) {
   const nav = [
-    { id:'dashboard', icon:'◈',  label:'Dashboard' },
-    { id:'lista',     icon:'≡',  label:'Lista' },
-    { id:'precios',   icon:'$',  label:'Precios' },
-    { id:'agregar',   icon:'+',  label:'Agregar' },
+    { id:'dashboard', icon:'◈', label:'Inicio'  },
+    { id:'lista',     icon:'≡', label:'Lista'   },
+    { id:'precios',   icon:'$', label:'Precios' },
+    { id:'calle',     icon:'🍔', label:'Calle'  },
+    { id:'agregar',   icon:'+', label:'Agregar' },
   ];
   return (
     <nav style={{
       position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)',
-      width:'100%', maxWidth:800,
-      background:'var(--bg)',
-      display:'grid', gridTemplateColumns:'repeat(4,1fr)',
-      padding:'8px 8px 16px', zIndex:100,
+      width:'100%', maxWidth:800, background:'var(--bg)',
+      display:'grid', gridTemplateColumns:'repeat(5,1fr)',
+      padding:'8px 4px 16px', zIndex:100,
     }}>
       {nav.map(n => {
         const active = view === n.id;
         return (
           <button key={n.id} onClick={() => onChange(n.id)} style={{
-            display:'flex', flexDirection:'column', alignItems:'center', gap:4,
-            padding:'8px 4px', background:'none', border:'none', cursor:'pointer',
+            display:'flex', flexDirection:'column', alignItems:'center', gap:3,
+            padding:'7px 2px', background:'none', border:'none', cursor:'pointer',
             color: active ? 'var(--indigo)' : 'var(--muted)',
-            transition:'color var(--t)',
-            position:'relative',
+            transition:'color var(--t)', position:'relative',
           }}>
-            <span style={{ fontSize:18, fontWeight:600, lineHeight:1, fontFamily:'monospace' }}>{n.icon}</span>
-            <span style={{ fontSize:11, fontWeight: active ? 600 : 400, letterSpacing:'0.02em' }}>{n.label}</span>
+            <span style={{ fontSize:16, fontWeight:600, lineHeight:1, fontFamily: n.id==='calle'?'inherit':'monospace' }}>{n.icon}</span>
+            <span style={{ fontSize:10, fontWeight: active?600:400, letterSpacing:'0.02em' }}>{n.label}</span>
             {active && (
-              <div style={{ position:'absolute', bottom:0, left:'50%', transform:'translateX(-50%)', width:20, height:2, background:'var(--indigo)', borderRadius:99 }} />
+              <div style={{ position:'absolute', bottom:0, left:'50%', transform:'translateX(-50%)', width:16, height:2, background:'var(--indigo)', borderRadius:99 }} />
             )}
           </button>
         );
@@ -294,25 +370,28 @@ function NavBar({ view, onChange }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MODAL WRAPPER
+═══════════════════════════════════════════════════════════════ */
 function Modal({ children, onClose, title, maxWidth=480 }) {
   useEffect(() => {
-    const handler = e => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const h = e => { if (e.key==='Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
   }, [onClose]);
   return (
     <div onClick={onClose} style={{
-      position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200,
-      display:'flex', alignItems:'flex-end', justifyContent:'center', padding: '0 0 0 0',
+      position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200,
+      display:'flex', alignItems:'flex-end', justifyContent:'center',
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background:'var(--card)', border:'1px solid var(--border)',
-        borderRadius:'12px 12px 0 0', width:'100%', maxWidth, maxHeight:'92vh',
-        overflow:'auto', padding:20,
+        borderRadius:'12px 12px 0 0', width:'100%', maxWidth,
+        maxHeight:'92vh', overflow:'auto', padding:20,
       }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
           <h3 style={{ fontSize:16 }}>{title}</h3>
-          <button onClick={onClose} style={{ color:'var(--muted)', fontSize:20, lineHeight:1, background:'none', border:'none', cursor:'pointer' }}>×</button>
+          <button onClick={onClose} style={{ color:'var(--muted)', fontSize:22, lineHeight:1, padding:'0 4px' }}>×</button>
         </div>
         {children}
       </div>
@@ -322,45 +401,30 @@ function Modal({ children, onClose, title, maxWidth=480 }) {
 
 function Toggle({ value, onChange, labelOn='Sí', labelOff='No' }) {
   return (
-    <div style={{ display:'flex', gap:0, border:'1px solid var(--border)', borderRadius:'var(--r)', overflow:'hidden', display:'inline-flex' }}>
+    <div style={{ display:'inline-flex', border:'1px solid var(--border)', borderRadius:'var(--r)', overflow:'hidden' }}>
       {[true,false].map(v => (
         <button key={String(v)} onClick={() => onChange(v)} style={{
-          padding:'7px 18px', fontSize:13, fontWeight:500,
+          padding:'7px 20px', fontSize:13, fontWeight:500,
           background: value===v ? 'var(--indigo)' : 'transparent',
           color: value===v ? '#fff' : 'var(--muted)',
-          border:'none', cursor:'pointer',
-          transition:'all var(--t)',
+          border:'none', cursor:'pointer', transition:'all var(--t)',
         }}>{v ? labelOn : labelOff}</button>
       ))}
     </div>
   );
 }
 
-/* ─── EXPIRY BADGE ───────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   PRODUCT BADGES
+═══════════════════════════════════════════════════════════════ */
 function ExpiryBadge({ expiryDate }) {
   if (!expiryDate) return null;
   const days = daysFromToday(expiryDate);
-  let color, label, icon;
-  if (days < 0)      { color='var(--danger)';  icon='⚠️'; label=`Caducó hace ${Math.abs(days)}d`; }
-  else if (days<=7)  { color='var(--danger)';  icon='⚠️'; label=`Caduca en ${days}d`; }
-  else if (days<=15) { color='var(--warning)'; icon='';  label=`Caduca en ${days}d`; }
-  else               { color='var(--muted)';   icon='';  label=`Cad. ${fmtDateShort(expiryDate)}`; }
-  return (
-    <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color }}>
-      <Dot color={color} />{icon}{label}
-    </span>
-  );
-}
-
-/* ─── COUNTDOWN BADGE ────────────────────────────────────────────────────── */
-function CountdownBadge({ days }) {
-  if (days === null || days === undefined) return null;
-  let color = 'var(--success)', label;
-  if (days < 0)       { color='var(--danger)';  label=`hace ${Math.abs(days)}d`; }
-  else if (days === 0){ color='var(--danger)';  label='hoy'; }
-  else if (days <= 2) { color='var(--danger)';  label=`${days}d`; }
-  else if (days <= 5) { color='var(--warning)'; label=`${days}d`; }
-  else                { label=`${days}d`; }
+  let color, label;
+  if (days < 0)      { color='var(--danger)';  label=`⚠️ Caducó hace ${Math.abs(days)}d`; }
+  else if (days<=7)  { color='var(--danger)';  label=`⚠️ Caduca en ${days}d`; }
+  else if (days<=15) { color='var(--warning)'; label=`Caduca en ${days}d`; }
+  else               { color='var(--muted)';   label=`Cad. ${fmtDateShort(expiryDate)}`; }
   return (
     <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color }}>
       <Dot color={color} />{label}
@@ -368,109 +432,75 @@ function CountdownBadge({ days }) {
   );
 }
 
-/* ─── NUEVA COMPRA MODAL ──────────────────────────────────────────────────── */
+function CountdownBadge({ days }) {
+  if (days === null || days === undefined) return null;
+  let color='var(--success)', label;
+  if (days<0)        { color='var(--danger)';  label=`hace ${Math.abs(days)}d`; }
+  else if (days===0) { color='var(--danger)';  label='hoy'; }
+  else if (days<=2)  { color='var(--danger)';  label=`${days}d`; }
+  else if (days<=5)  { color='var(--warning)'; label=`${days}d`; }
+  else               { label=`${days}d`; }
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color }}>
+      <Dot color={color} />{label}
+    </span>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NUEVA COMPRA (products)
+═══════════════════════════════════════════════════════════════ */
 function NuevaCompraModal({ product, onClose, onSave }) {
-  const [form, setForm] = useState({
-    date: today(),
-    store: STORES[0],
-    price: '',
-    quantity: '1',
-    hadRemaining: false,
-    remainingPct: 20,
-  });
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const lastHistory = product.purchaseHistory?.length
-    ? product.purchaseHistory[product.purchaseHistory.length-1]
-    : null;
+  const [form, setForm] = useState({ date:today(), store:STORES[0], price:'', quantity:'1', hadRemaining:false, remainingPct:20 });
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+  const lastH = product.purchaseHistory?.length ? product.purchaseHistory[product.purchaseHistory.length-1] : null;
 
   const preview = useMemo(() => {
-    if (!lastHistory) return null;
-    const elapsed = daysDiff(lastHistory.date, form.date || today());
+    if (!lastH) return null;
+    const elapsed = daysDiff(lastH.date, form.date || today());
     if (elapsed <= 0) return null;
-    const rPct = form.hadRemaining ? (form.remainingPct || 0) : 0;
-    let dur;
-    if (rPct <= 0) dur = elapsed;
-    else dur = elapsed * 100 / (100 - rPct);
-    return Math.round(dur);
-  }, [lastHistory, form.date, form.hadRemaining, form.remainingPct]);
+    const rPct = form.hadRemaining ? (form.remainingPct||0) : 0;
+    return Math.round(rPct<=0 ? elapsed : elapsed*100/(100-rPct));
+  }, [lastH, form.date, form.hadRemaining, form.remainingPct]);
 
   const handleSave = () => {
+    if (!form.date) return alert('Selecciona la fecha.');
     const price = parseFloat(form.price);
-    const qty = parseFloat(form.quantity) || 1;
-    if (!form.date) return alert('Selecciona la fecha de compra.');
-    const entry = {
-      id: uid(),
-      date: form.date,
-      store: form.store,
-      price: isNaN(price) ? 0 : price,
-      quantity: qty,
-      remainingPct: form.hadRemaining ? (form.remainingPct || 0) : 0,
-    };
-    const newHistory = [...(product.purchaseHistory || []), entry];
-    const newPrices = { ...(product.prices || {}) };
-    if (!isNaN(price) && price > 0) newPrices[form.store] = price;
-    onSave({ ...product, purchaseHistory: newHistory, prices: newPrices });
+    const entry = { id:uid(), date:form.date, store:form.store, price:isNaN(price)?0:price, quantity:parseFloat(form.quantity)||1, remainingPct: form.hadRemaining?(form.remainingPct||0):0 };
+    const newHistory = [...(product.purchaseHistory||[]), entry];
+    const newPrices = { ...(product.prices||{}) };
+    if (!isNaN(price) && price>0) newPrices[form.store] = price;
+    onSave({ ...product, purchaseHistory:newHistory, prices:newPrices });
   };
 
   return (
     <Modal title={`🛒 Nueva Compra — ${product.name}`} onClose={onClose}>
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-        <div>
-          <Label>Fecha de compra</Label>
-          <input type="date" value={form.date} onChange={e => set('date', e.target.value)} />
-        </div>
+        <div><Label>Fecha de compra</Label><input type="date" value={form.date} onChange={e=>set('date',e.target.value)} /></div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          <div>
-            <Label>Tienda</Label>
-            <select value={form.store} onChange={e => set('store', e.target.value)}>
-              {STORES.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <Label>Precio pagado ($)</Label>
-            <input type="number" min="0" step="0.01" placeholder="0.00"
-              value={form.price} onChange={e => set('price', e.target.value)} />
-          </div>
+          <div><Label>Tienda</Label><select value={form.store} onChange={e=>set('store',e.target.value)}>{STORES.map(s=><option key={s}>{s}</option>)}</select></div>
+          <div><Label>Precio ($)</Label><input type="number" min="0" step="0.01" placeholder="0.00" value={form.price} onChange={e=>set('price',e.target.value)} /></div>
         </div>
-        <div>
-          <Label>Cantidad comprada</Label>
-          <input type="number" min="0.01" step="0.01" value={form.quantity}
-            onChange={e => set('quantity', e.target.value)} />
-        </div>
-
-        {lastHistory && (
+        <div><Label>Cantidad</Label><input type="number" min="0.01" step="0.01" value={form.quantity} onChange={e=>set('quantity',e.target.value)} /></div>
+        {lastH && (
           <>
-            <div>
-              <Label style={{ marginBottom:8 }}>¿Quedaba algo del anterior?</Label>
-              <Toggle value={form.hadRemaining} onChange={v => set('hadRemaining', v)} />
-            </div>
+            <div><Label style={{marginBottom:8}}>¿Quedaba algo del anterior?</Label><Toggle value={form.hadRemaining} onChange={v=>set('hadRemaining',v)} /></div>
             {form.hadRemaining && (
               <div>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                  <Label style={{ marginBottom:0 }}>¿Qué % quedaba?</Label>
+                  <Label style={{marginBottom:0}}>¿Qué % quedaba?</Label>
                   <span style={{ fontSize:13, fontWeight:600, color:'var(--indigo)' }}>{form.remainingPct}%</span>
                 </div>
-                <input type="range" min="1" max="99" value={form.remainingPct}
-                  onChange={e => set('remainingPct', parseInt(e.target.value))} />
-                <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--muted)', marginTop:3 }}>
-                  <span>1%</span><span>50%</span><span>99%</span>
-                </div>
+                <input type="range" min="1" max="99" value={form.remainingPct} onChange={e=>set('remainingPct',parseInt(e.target.value))} />
               </div>
             )}
-            {preview !== null && (
-              <div style={{
-                background:'var(--surface)', border:'1px solid var(--border)',
-                borderRadius:'var(--r)', padding:'10px 12px', fontSize:12,
-              }}>
-                <span style={{ color:'var(--muted)' }}>Duración calculada para esta compra: </span>
-                <strong style={{ color:'var(--indigo)' }}>{preview} días</strong>
+            {preview!==null && (
+              <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--r)', padding:'9px 12px', fontSize:12 }}>
+                Duración calculada: <strong style={{color:'var(--indigo)'}}>{preview} días</strong>
               </div>
             )}
           </>
         )}
-
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:4 }}>
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn variant="primary" onClick={handleSave}>Guardar compra</Btn>
@@ -480,24 +510,27 @@ function NuevaCompraModal({ product, onClose, onSave }) {
   );
 }
 
-/* ─── DELETE MODAL ───────────────────────────────────────────────────────── */
-function DeleteModal({ product, onConfirm, onCancel }) {
-  if (!product) return null;
+/* ═══════════════════════════════════════════════════════════════
+   DELETE MODALS
+═══════════════════════════════════════════════════════════════ */
+function DeleteModal({ item, label='producto', onConfirm, onCancel }) {
+  if (!item) return null;
   return (
-    <Modal title="Eliminar producto" onClose={onCancel} maxWidth={360}>
+    <Modal title={`Eliminar ${label}`} onClose={onCancel} maxWidth={360}>
       <p style={{ color:'var(--muted)', marginBottom:20 }}>
-        ¿Seguro que deseas eliminar <strong style={{ color:'var(--text)' }}>{product.name}</strong>?
-        Se perderá todo el historial de compras.
+        ¿Eliminar <strong style={{color:'var(--text)'}}>{item.name}</strong>? Se perderá todo el historial.
       </p>
       <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
         <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>
-        <Btn variant="confirm" onClick={() => onConfirm(product.id)}>Eliminar</Btn>
+        <Btn variant="confirm" onClick={() => onConfirm(item.id)}>Eliminar</Btn>
       </div>
     </Modal>
   );
 }
 
-/* ─── PRODUCT CARD ───────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   PRODUCT CARD
+═══════════════════════════════════════════════════════════════ */
 function ProductCard({ product, onEdit, onDelete, onNuevaCompra }) {
   const [histOpen, setHistOpen] = useState(false);
   const cat = getCat(product.category);
@@ -506,18 +539,14 @@ function ProductCard({ product, onEdit, onDelete, onNuevaCompra }) {
   const nextDate = getNextPurchaseDate(product);
   const daysLeft = nextDate ? daysFromToday(nextDate) : null;
   const monthly = monthlyEstimate(product);
-  const { best, worst } = getBestWorst(product.prices);
-  const sorted = [...h].reverse(); // newest first for display
+  const { best } = getBestWorst(product.prices);
+  const sorted = [...h].reverse();
 
   return (
-    <div style={{
-      border:'1px solid var(--border)', borderRadius:10,
-      padding:14, marginBottom:10,
-    }}>
-      {/* Header */}
+    <div style={{ border:'1px solid var(--border)', borderRadius:10, padding:14, marginBottom:10 }}>
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
         <div style={{ display:'flex', gap:10, alignItems:'flex-start', flex:1, minWidth:0 }}>
-          <span style={{ fontSize:22, flexShrink:0, marginTop:1 }}>{cat.emoji}</span>
+          <span style={{ fontSize:22, flexShrink:0 }}>{cat.emoji}</span>
           <div style={{ minWidth:0 }}>
             <div style={{ fontWeight:600, fontSize:14, lineHeight:1.4 }}>{product.name}</div>
             <div style={{ fontSize:11, color:'var(--muted)', marginTop:1 }}>{cat.label} · {product.unit}</div>
@@ -529,88 +558,63 @@ function ProductCard({ product, onEdit, onDelete, onNuevaCompra }) {
         </div>
       </div>
 
-      {/* Stats row */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:10 }}>
-        <div style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
-          <div style={{ fontSize:11, color:'var(--muted)' }}>Duración prom.</div>
-          <div style={{ fontWeight:600, marginTop:1 }}>
-            {dur ? `${dur}d` : <span style={{ color:'var(--dim)', fontSize:11 }}>aprendiendo…</span>}
+        {[
+          { label:'Duración prom.', value: dur ? `${dur}d` : null, fallback:'aprendiendo…', color:'var(--text)' },
+          { label:'Mejor precio', value: best ? `$${best[1].toFixed(2)}` : null, fallback:'—', color:'var(--success)' },
+          { label:'Est. mensual', value: monthly ? `$${monthly.toFixed(2)}` : null, fallback:'—', color:'var(--indigo)' },
+        ].map(s => (
+          <div key={s.label} style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
+            <div style={{ fontSize:11, color:'var(--muted)' }}>{s.label}</div>
+            <div style={{ fontWeight:600, marginTop:1, color: s.value ? s.color : 'var(--dim)', fontSize: s.value ? 13 : 11 }}>
+              {s.value || s.fallback}
+            </div>
           </div>
-        </div>
-        <div style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
-          <div style={{ fontSize:11, color:'var(--muted)' }}>Mejor precio</div>
-          <div style={{ fontWeight:600, marginTop:1, color:'var(--success)' }}>
-            {best ? `$${best[1].toFixed(2)}` : '—'}
-          </div>
-        </div>
-        <div style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
-          <div style={{ fontSize:11, color:'var(--muted)' }}>Est. mensual</div>
-          <div style={{ fontWeight:600, marginTop:1, color:'var(--indigo)' }}>
-            {monthly ? `$${monthly.toFixed(2)}` : '—'}
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Purchase count + next date */}
       <div style={{ fontSize:12, color:'var(--muted)', marginBottom:10, display:'flex', gap:16, flexWrap:'wrap' }}>
         <span style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <Dot color={h.length >= 2 ? 'var(--success)' : 'var(--warning)'} />
-          {h.length === 0 ? 'Sin compras' : h.length === 1 ? '1 compra · aprendiendo' : `${h.length} compras registradas`}
+          <Dot color={h.length>=2?'var(--success)':'var(--warning)'} />
+          {h.length===0 ? 'Sin compras' : h.length===1 ? '1 compra · aprendiendo' : `${h.length} compras`}
         </span>
-        {nextDate && (
-          <span>Próxima: {fmtDate(nextDate)}</span>
-        )}
+        {nextDate && <span>Próxima: {fmtDate(nextDate)}</span>}
       </div>
 
-      {/* Action buttons */}
-      <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
-        <Btn variant="green" size="sm" onClick={() => onNuevaCompra(product)}>
-          🛒 Nueva Compra
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+        <Btn variant="green" size="sm" onClick={()=>onNuevaCompra(product)}>🛒 Nueva Compra</Btn>
+        <Btn variant="ghost" size="sm" onClick={()=>setHistOpen(o=>!o)}>
+          {histOpen?'▲ Ocultar':'▼ Historial'}
+          {h.length>0 && <span style={{background:'var(--border)',borderRadius:99,padding:'0 5px',fontSize:10}}>{h.length}</span>}
         </Btn>
-        <Btn variant="ghost" size="sm" onClick={() => setHistOpen(o => !o)}>
-          {histOpen ? '▲ Ocultar' : '▼ Historial'}
-          {h.length > 0 && <span style={{ background:'var(--border)', borderRadius:99, padding:'0 6px', fontSize:10 }}>{h.length}</span>}
-        </Btn>
-        <Btn variant="ghost" size="sm" onClick={() => onEdit(product)}>✏️</Btn>
-        <Btn variant="danger" size="sm" onClick={() => onDelete(product)}>🗑️</Btn>
+        <Btn variant="ghost" size="sm" onClick={()=>onEdit(product)}>✏️</Btn>
+        <Btn variant="danger" size="sm" onClick={()=>onDelete(product)}>🗑️</Btn>
       </div>
 
-      {/* Purchase history */}
-      {histOpen && h.length > 0 && (
+      {histOpen && h.length>0 && (
         <div style={{ marginTop:12, borderTop:'1px solid var(--border)', paddingTop:12 }}>
-          {sorted.map((entry, idx) => {
-            const originalIdx = h.length - 1 - idx;
-            const prevEntry = originalIdx > 0 ? h[originalIdx-1] : null;
-            const elapsed = prevEntry ? daysDiff(prevEntry.date, entry.date) : null;
-            const calcDur = elapsed !== null
-              ? (entry.remainingPct > 0 ? Math.round(elapsed*100/(100-entry.remainingPct)) : elapsed)
-              : null;
+          {sorted.map((entry,idx) => {
+            const origIdx = h.length-1-idx;
+            const prev = origIdx>0 ? h[origIdx-1] : null;
+            const elapsed = prev ? daysDiff(prev.date, entry.date) : null;
+            const calcDur = elapsed!==null ? (entry.remainingPct>0 ? Math.round(elapsed*100/(100-entry.remainingPct)) : elapsed) : null;
             return (
               <div key={entry.id}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', padding:'6px 0', fontSize:12 }}>
-                  <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
-                    <span style={{ color:'var(--muted)', fontSize:14 }}>🛒</span>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <span style={{ color:'var(--muted)' }}>🛒</span>
                     <div>
                       <div style={{ fontWeight:500 }}>{fmtDateShort(entry.date)} · {entry.store}</div>
                       <div style={{ color:'var(--muted)', marginTop:1 }}>
-                        {entry.quantity} {product.unit}
-                        {entry.price > 0 && ` · $${entry.price.toFixed(2)}`}
-                        {entry.remainingPct > 0 && <span style={{ color:'var(--warning)', marginLeft:6 }}>quedaba {entry.remainingPct}%</span>}
+                        {entry.quantity} {product.unit}{entry.price>0 && ` · $${entry.price.toFixed(2)}`}
+                        {entry.remainingPct>0 && <span style={{color:'var(--warning)',marginLeft:6}}>quedaba {entry.remainingPct}%</span>}
                       </div>
                     </div>
                   </div>
-                  {idx === 0 && h.length === 1 && (
-                    <span style={{ fontSize:11, color:'var(--muted)' }}>primera compra</span>
-                  )}
+                  {idx===0&&h.length===1&&<span style={{fontSize:11,color:'var(--muted)'}}>primera</span>}
                 </div>
-                {prevEntry && calcDur !== null && (
-                  <div style={{ fontSize:11, color:'var(--muted)', paddingLeft:22, paddingBottom:4 }}>
-                    ↕ duró {calcDur} días
-                  </div>
-                )}
-                {idx < sorted.length - 1 && (
-                  <div style={{ height:1, background:'var(--border)', margin:'2px 0' }} />
-                )}
+                {prev&&calcDur!==null&&<div style={{fontSize:11,color:'var(--muted)',paddingLeft:22,paddingBottom:4}}>↕ duró {calcDur} días</div>}
+                {idx<sorted.length-1&&<Divider />}
               </div>
             );
           })}
@@ -620,46 +624,451 @@ function ProductCard({ product, onEdit, onDelete, onNuevaCompra }) {
   );
 }
 
-/* ─── DASHBOARD ──────────────────────────────────────────────────────────── */
-function Dashboard({ products, onNuevaCompra, onEdit }) {
-  const totalMonthly = useMemo(() =>
-    products.reduce((s,p) => s + (monthlyEstimate(p)||0), 0), [products]);
+/* ═══════════════════════════════════════════════════════════════
+   NUEVO PEDIDO MODAL (street food)
+═══════════════════════════════════════════════════════════════ */
+function NuevoPedidoModal({ place, onClose, onSave }) {
+  const [form, setForm] = useState({ date:today(), total:'', rating:0, notes:'' });
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
 
-  const urgent = useMemo(() => products.filter(p => {
-    const next = getNextPurchaseDate(p);
-    if (!next) return false;
-    return daysFromToday(next) <= 5;
-  }).sort((a,b) => daysFromToday(getNextPurchaseDate(a)) - daysFromToday(getNextPurchaseDate(b))), [products]);
+  const handleSave = () => {
+    const total = parseFloat(form.total);
+    if (isNaN(total) || total <= 0) return alert('Ingresa el total gastado.');
+    if (!form.date) return alert('Selecciona la fecha.');
+    const order = { id:uid(), date:form.date, total, rating:form.rating, notes:form.notes.trim() };
+    onSave({ ...place, orders:[...(place.orders||[]), order] });
+  };
 
-  const expiring = useMemo(() => products.filter(p => {
-    if (!p.expiryDate) return false;
-    return daysFromToday(p.expiryDate) <= 15;
-  }), [products]);
+  return (
+    <Modal title={`🍽️ Nuevo Pedido — ${place.name}`} onClose={onClose}>
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div><Label>Fecha</Label><input type="date" value={form.date} onChange={e=>set('date',e.target.value)} /></div>
+          <div>
+            <Label>Total gastado ($)</Label>
+            <input type="number" min="0" step="0.01" placeholder="0.00" value={form.total} onChange={e=>set('total',e.target.value)} />
+          </div>
+        </div>
+        <div>
+          <Label style={{marginBottom:8}}>Calificación (para futuras visitas)</Label>
+          <StarRating value={form.rating} onChange={v=>set('rating',v)} size={26} />
+          {form.rating>0 && (
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:5 }}>
+              {['','😞 Malo','😐 Regular','😊 Bueno','😄 Muy bueno','🤩 Excelente'][form.rating]}
+            </div>
+          )}
+        </div>
+        <div>
+          <Label>Notas (opcional)</Label>
+          <textarea rows={2} style={{ resize:'vertical' }} placeholder="¿Qué pediste? ¿Alguna observación?" value={form.notes} onChange={e=>set('notes',e.target.value)} />
+        </div>
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:4 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn variant="primary" onClick={handleSave}>Guardar pedido</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
-  const byCat = useMemo(() => {
-    const m = {};
-    products.forEach(p => { const v = monthlyEstimate(p)||0; m[p.category]=(m[p.category]||0)+v; });
-    return Object.entries(m).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-  }, [products]);
-  const maxCat = byCat.length ? byCat[0][1] : 1;
+/* ═══════════════════════════════════════════════════════════════
+   NUEVO LUGAR MODAL
+═══════════════════════════════════════════════════════════════ */
+function NuevoLugarModal({ editTarget, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: editTarget?.name || '',
+    placeCategory: editTarget?.placeCategory || 'restaurant',
+    // first order (only if new)
+    date: today(), total:'', rating:0, notes:'',
+  });
+  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
+  const isEdit = !!editTarget;
+
+  const handleSave = () => {
+    if (!form.name.trim()) return alert('El nombre es requerido.');
+    let orders = editTarget?.orders || [];
+    if (!isEdit) {
+      const total = parseFloat(form.total);
+      if (!isNaN(total) && total>0) {
+        orders = [{ id:uid(), date:form.date, total, rating:form.rating, notes:form.notes.trim() }];
+      }
+    }
+    onSave({
+      id: editTarget?.id || uid(),
+      name: form.name.trim(),
+      placeCategory: form.placeCategory,
+      orders,
+    });
+  };
+
+  const cat = getPlaceCat(form.placeCategory);
+
+  return (
+    <Modal title={isEdit ? '✏️ Editar lugar' : '🍽️ Nuevo lugar'} onClose={onClose}>
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <div>
+          <Label>Nombre del restaurante / lugar *</Label>
+          <input placeholder="Ej: KFC, La Choza del Sabor…" value={form.name} onChange={e=>set('name',e.target.value)} />
+        </div>
+        <div>
+          <Label>Tipo de lugar</Label>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginTop:4 }}>
+            {PLACE_CATS.map(c => (
+              <button key={c.id} onClick={()=>set('placeCategory',c.id)} style={{
+                padding:'8px 4px', borderRadius:8, fontSize:11, textAlign:'center',
+                cursor:'pointer', transition:'all var(--t)',
+                background: form.placeCategory===c.id ? 'rgba(99,102,241,0.15)' : 'var(--surface)',
+                border: `1px solid ${form.placeCategory===c.id ? 'var(--indigo)' : 'var(--border)'}`,
+                color: form.placeCategory===c.id ? 'var(--indigo)' : 'var(--muted)',
+              }}>
+                <div style={{fontSize:18}}>{c.emoji}</div>
+                <div style={{marginTop:2,lineHeight:1.2}}>{c.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {!isEdit && (
+          <>
+            <Divider />
+            <div style={{ fontSize:12, color:'var(--muted)' }}>Primer pedido (opcional — puedes saltarte esto)</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div><Label>Fecha</Label><input type="date" value={form.date} onChange={e=>set('date',e.target.value)} /></div>
+              <div><Label>Total ($)</Label><input type="number" min="0" step="0.01" placeholder="0.00" value={form.total} onChange={e=>set('total',e.target.value)} /></div>
+            </div>
+            <div>
+              <Label style={{marginBottom:8}}>Calificación</Label>
+              <StarRating value={form.rating} onChange={v=>set('rating',v)} size={24} />
+            </div>
+            <div>
+              <Label>Notas</Label>
+              <textarea rows={2} style={{resize:'vertical'}} placeholder="¿Qué pediste?" value={form.notes} onChange={e=>set('notes',e.target.value)} />
+            </div>
+          </>
+        )}
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:4 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn variant="primary" onClick={handleSave}>{isEdit ? 'Guardar cambios' : 'Crear lugar'}</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PLACE CARD
+═══════════════════════════════════════════════════════════════ */
+function PlaceCard({ place, onNuevoPedido, onEdit, onDelete }) {
+  const [histOpen, setHistOpen] = useState(false);
+  const cat = getPlaceCat(place.placeCategory);
+  const orders = place.orders || [];
+  const sorted = [...orders].sort((a,b) => b.date.localeCompare(a.date));
+  const avg = avgRating(orders);
+  const thisMonthTotal = spentThisMonth(orders);
+  const allTotal = orders.reduce((s,o) => s+(o.total||0), 0);
+  const avgPerOrder = orders.length ? allTotal/orders.length : 0;
+  const lastOrder = sorted[0];
+
+  return (
+    <div style={{ border:'1px solid var(--border)', borderRadius:10, padding:14, marginBottom:10 }}>
+      {/* Header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10, gap:10 }}>
+        <div style={{ display:'flex', gap:10, alignItems:'flex-start', flex:1, minWidth:0 }}>
+          <span style={{ fontSize:24, flexShrink:0 }}>{cat.emoji}</span>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontWeight:600, fontSize:15, lineHeight:1.3 }}>{place.name}</div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{cat.label}</div>
+          </div>
+        </div>
+        <div style={{ flexShrink:0, textAlign:'right' }}>
+          {avg > 0 && <StarRating value={Math.round(avg)} readOnly size={13} />}
+          {avg > 0 && <div style={{ fontSize:11, color:'var(--muted)', marginTop:2 }}>{avg.toFixed(1)} promedio</div>}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:10 }}>
+        {[
+          { label:'Este mes', value: thisMonthTotal>0 ? `$${thisMonthTotal.toFixed(2)}` : '—', color:'var(--indigo)' },
+          { label:'Total hist.', value: allTotal>0 ? `$${allTotal.toFixed(2)}` : '—', color:'var(--text)' },
+          { label:'Prom./pedido', value: avgPerOrder>0 ? `$${avgPerOrder.toFixed(2)}` : '—', color:'var(--text)' },
+        ].map(s => (
+          <div key={s.label} style={{ background:'var(--surface)', borderRadius:6, padding:'8px 10px' }}>
+            <div style={{ fontSize:11, color:'var(--muted)' }}>{s.label}</div>
+            <div style={{ fontWeight:600, marginTop:1, color:s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Meta */}
+      <div style={{ fontSize:12, color:'var(--muted)', marginBottom:10, display:'flex', gap:16, flexWrap:'wrap' }}>
+        <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <Dot color={orders.length>0?'var(--success)':'var(--dim)'} />
+          {orders.length===0 ? 'Sin pedidos' : `${orders.length} pedido${orders.length!==1?'s':''}`}
+        </span>
+        {lastOrder && <span>Último: {fmtDateShort(lastOrder.date)}</span>}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+        <Btn variant="amber" size="sm" onClick={()=>onNuevoPedido(place)}>🍽️ Nuevo Pedido</Btn>
+        <Btn variant="ghost" size="sm" onClick={()=>setHistOpen(o=>!o)}>
+          {histOpen?'▲ Ocultar':'▼ Historial'}
+          {orders.length>0&&<span style={{background:'var(--border)',borderRadius:99,padding:'0 5px',fontSize:10}}>{orders.length}</span>}
+        </Btn>
+        <Btn variant="ghost" size="sm" onClick={()=>onEdit(place)}>✏️</Btn>
+        <Btn variant="danger" size="sm" onClick={()=>onDelete(place)}>🗑️</Btn>
+      </div>
+
+      {/* History */}
+      {histOpen && orders.length>0 && (
+        <div style={{ marginTop:12, borderTop:'1px solid var(--border)', paddingTop:12 }}>
+          {sorted.map((order, idx) => (
+            <div key={order.id}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', padding:'7px 0', fontSize:12 }}>
+                <div style={{ display:'flex', gap:8, flex:1, minWidth:0 }}>
+                  <span style={{ color:'var(--muted)', flexShrink:0 }}>📦</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <span style={{ fontWeight:500 }}>{fmtDateShort(order.date)}</span>
+                      <span style={{ fontWeight:700, color:'var(--text)' }}>${order.total.toFixed(2)}</span>
+                      {order.rating>0 && <StarRating value={order.rating} readOnly size={12} />}
+                    </div>
+                    {order.notes && <div style={{ color:'var(--muted)', marginTop:2, fontSize:11 }}>{order.notes}</div>}
+                  </div>
+                </div>
+                <div style={{ fontSize:11, color:'var(--muted)', flexShrink:0, marginLeft:8 }}>
+                  {daysDiff(order.date, today())===0 ? 'hoy' : `hace ${Math.abs(daysFromToday(order.date))}d`}
+                </div>
+              </div>
+              {idx<sorted.length-1&&<Divider />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CALLE VIEW
+═══════════════════════════════════════════════════════════════ */
+function CalleView({ places, onUpdate, onAdd, onDelete }) {
+  const [nuevoPedidoTarget, setNuevoPedidoTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
+  const [showNuevoLugar, setShowNuevoLugar] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filterCat, setFilterCat] = useState('all');
+
+  // Stats
+  const totalThisMonth = useMemo(() =>
+    places.reduce((s,p) => s+spentThisMonth(p.orders), 0), [places]);
+  const ordersThisMonth = useMemo(() =>
+    places.reduce((s,p) => s+(p.orders||[]).filter(o=>isThisMonth(o.date)).length, 0), [places]);
+
+  // Per-place spend last 30 days for bar chart
+  const byPlace = useMemo(() =>
+    places.map(p => ({ ...p, last30:spentLast30(p.orders) }))
+      .filter(p => p.last30>0)
+      .sort((a,b) => b.last30-a.last30), [places]);
+  const maxSpend = byPlace.length ? byPlace[0].last30 : 1;
+
+  // All orders sorted by date (recent orders feed)
+  const recentOrders = useMemo(() => {
+    const all = [];
+    places.forEach(p => {
+      (p.orders||[]).forEach(o => all.push({ ...o, placeName:p.name, placeEmoji:getPlaceCat(p.placeCategory).emoji }));
+    });
+    return all.sort((a,b) => b.date.localeCompare(a.date)).slice(0,12);
+  }, [places]);
+
+  const filtered = useMemo(() =>
+    filterCat==='all' ? places : places.filter(p=>p.placeCategory===filterCat), [places, filterCat]);
+
+  const handleSavePedido = (updatedPlace) => {
+    onUpdate(updatedPlace);
+    setNuevoPedidoTarget(null);
+  };
+  const handleSaveLugar = (place) => {
+    onAdd(place);
+    setShowNuevoLugar(false);
+    setEditTarget(null);
+  };
+  const handleDelete = (id) => {
+    onDelete(id);
+    setDeleteTarget(null);
+  };
 
   return (
     <div style={{ padding:'20px 16px 100px' }}>
-      <div style={{ marginBottom:24 }}>
-        <h2 style={{ fontSize:20, marginBottom:3 }}>Dashboard</h2>
-        <div style={{ fontSize:12, color:'var(--muted)' }}>{products.length} productos · actualizado hoy</div>
+      {/* Header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+        <div>
+          <h2 style={{ fontSize:20, marginBottom:3 }}>Calle de Comidas</h2>
+          <div style={{ fontSize:12, color:'var(--muted)' }}>{places.length} lugares · este mes</div>
+        </div>
+        <Btn variant="primary" size="sm" onClick={()=>setShowNuevoLugar(true)}>+ Nuevo lugar</Btn>
       </div>
 
       {/* Top stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:24 }}>
+        {[
+          { label:'Gasto este mes', value:`$${totalThisMonth.toFixed(2)}`, dot:'var(--indigo)' },
+          { label:'Pedidos este mes', value:ordersThisMonth, dot:'var(--warning)' },
+          { label:'Lugares', value:places.length, dot:'var(--muted)' },
+        ].map(s=>(
+          <div key={s.label} style={{ border:'1px solid var(--border)', borderRadius:10, padding:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
+              <Dot color={s.dot} />
+              <span style={{ fontSize:10, color:'var(--muted)' }}>{s.label}</span>
+            </div>
+            <div style={{ fontSize:20, fontWeight:600, fontFamily:"'Space Grotesk',sans-serif", lineHeight:1 }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Spending by place (last 30 days) */}
+      {byPlace.length>0 && (
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
+            Gasto por lugar — últimos 30 días
+          </div>
+          {byPlace.map(p => {
+            const cat = getPlaceCat(p.placeCategory);
+            return (
+              <div key={p.id} style={{ marginBottom:12 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:5 }}>
+                  <span>{cat.emoji} {p.name}</span>
+                  <span style={{ fontWeight:600 }}>${p.last30.toFixed(2)}</span>
+                </div>
+                <ThinLine value={p.last30} max={maxSpend} color='var(--amber)' />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Category filter */}
+      <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:6, marginBottom:16 }}>
+        <button onClick={()=>setFilterCat('all')} style={{...chipStyle(filterCat==='all'),whiteSpace:'nowrap',flexShrink:0}}>Todos</button>
+        {PLACE_CATS.map(c=>(
+          <button key={c.id} onClick={()=>setFilterCat(c.id)} style={{...chipStyle(filterCat===c.id),whiteSpace:'nowrap',flexShrink:0}}>
+            {c.emoji} {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Place list */}
+      {filtered.length===0 ? (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--muted)' }}>
+          <div style={{ fontSize:36, marginBottom:10 }}>🍽️</div>
+          <div style={{ fontWeight:500, marginBottom:6 }}>Sin lugares registrados</div>
+          <div style={{ fontSize:12 }}>Agrega un restaurante o puesto de comida</div>
+        </div>
+      ) : (
+        filtered.map(place=>(
+          <PlaceCard key={place.id} place={place}
+            onNuevoPedido={setNuevoPedidoTarget}
+            onEdit={p=>{setEditTarget(p);}}
+            onDelete={setDeleteTarget}
+          />
+        ))
+      )}
+
+      {/* Recent orders feed */}
+      {recentOrders.length>0 && (
+        <div style={{ marginTop:28 }}>
+          <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
+            Pedidos recientes
+          </div>
+          {recentOrders.map(o=>(
+            <div key={o.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', padding:'9px 0', borderBottom:'1px solid var(--border)' }}>
+              <div style={{ display:'flex', gap:10, alignItems:'flex-start', flex:1, minWidth:0 }}>
+                <span style={{ fontSize:18, flexShrink:0 }}>{o.placeEmoji}</span>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontWeight:500, fontSize:13 }}>{o.placeName}</div>
+                  {o.notes && <div style={{ fontSize:11, color:'var(--muted)', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.notes}</div>}
+                  {o.rating>0 && <StarRating value={o.rating} readOnly size={12} />}
+                </div>
+              </div>
+              <div style={{ textAlign:'right', flexShrink:0, marginLeft:12 }}>
+                <div style={{ fontWeight:600 }}>${o.total.toFixed(2)}</div>
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:1 }}>{fmtDateShort(o.date)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modals */}
+      {nuevoPedidoTarget && (
+        <NuevoPedidoModal place={nuevoPedidoTarget} onClose={()=>setNuevoPedidoTarget(null)} onSave={handleSavePedido} />
+      )}
+      {(showNuevoLugar || editTarget) && (
+        <NuevoLugarModal
+          editTarget={editTarget}
+          onClose={()=>{ setShowNuevoLugar(false); setEditTarget(null); }}
+          onSave={handleSaveLugar}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteModal item={deleteTarget} label="lugar" onConfirm={handleDelete} onCancel={()=>setDeleteTarget(null)} />
+      )}
+    </div>
+  );
+}
+
+function chipStyle(active) {
+  return {
+    padding:'5px 12px', fontSize:12, fontWeight:active?600:400,
+    background:active?'var(--indigo)':'transparent',
+    color:active?'#fff':'var(--muted)',
+    border:active?'none':'1px solid var(--border)',
+    borderRadius:6, cursor:'pointer', transition:'all var(--t)',
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════════════ */
+function Dashboard({ products, places, onEdit }) {
+  const totalMonthly = useMemo(()=>products.reduce((s,p)=>s+(monthlyEstimate(p)||0),0),[products]);
+  const streetThisMonth = useMemo(()=>places.reduce((s,p)=>s+spentThisMonth(p.orders),0),[places]);
+
+  const urgent = useMemo(()=>products.filter(p=>{
+    const next=getNextPurchaseDate(p); if(!next) return false; return daysFromToday(next)<=5;
+  }).sort((a,b)=>daysFromToday(getNextPurchaseDate(a))-daysFromToday(getNextPurchaseDate(b))),[products]);
+
+  const expiring = useMemo(()=>products.filter(p=>p.expiryDate&&daysFromToday(p.expiryDate)<=15),[products]);
+
+  const byCat = useMemo(()=>{
+    const m={};
+    products.forEach(p=>{const v=monthlyEstimate(p)||0; m[p.category]=(m[p.category]||0)+v;});
+    return Object.entries(m).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  },[products]);
+  const maxCat = byCat.length ? byCat[0][1] : 1;
+
+  const topPlaces = useMemo(()=>
+    places.map(p=>({...p,last30:spentLast30(p.orders)})).filter(p=>p.last30>0).sort((a,b)=>b.last30-a.last30).slice(0,3)
+  ,[places]);
+
+  return (
+    <div style={{ padding:'20px 16px 100px' }}>
+      <div style={{ marginBottom:22 }}>
+        <h2 style={{ fontSize:20, marginBottom:3 }}>Inicio</h2>
+        <div style={{ fontSize:12, color:'var(--muted)' }}>{products.length} productos · {places.length} lugares</div>
+      </div>
+
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:24 }}>
         {[
-          { label:'Gasto mensual est.', value:`$${totalMonthly.toFixed(2)}`, sub:'al mejor precio', dot:'var(--indigo)' },
-          { label:'Compras urgentes', value:urgent.length, sub:'próximos 5 días', dot: urgent.length>0?'var(--warning)':'var(--success)' },
-          { label:'Productos', value:products.length, sub:'registrados', dot:'var(--muted)' },
-          { label:'Por vencer', value:expiring.length, sub:'próximos 15 días', dot: expiring.length>0?'var(--warning)':'var(--muted)' },
-        ].map(s => (
+          { label:'Supermercado / mes', value:`$${totalMonthly.toFixed(2)}`, sub:'est. mejor precio', dot:'var(--indigo)' },
+          { label:'Comida en la calle', value:`$${streetThisMonth.toFixed(2)}`, sub:'este mes', dot:'var(--amber)' },
+          { label:'Compras urgentes', value:urgent.length, sub:'próx. 5 días', dot:urgent.length>0?'var(--warning)':'var(--success)' },
+          { label:'Por vencer', value:expiring.length, sub:'próx. 15 días', dot:expiring.length>0?'var(--warning)':'var(--muted)' },
+        ].map(s=>(
           <div key={s.label} style={{ border:'1px solid var(--border)', borderRadius:10, padding:14 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:7 }}>
               <Dot color={s.dot} />
               <span style={{ fontSize:11, color:'var(--muted)' }}>{s.label}</span>
             </div>
@@ -669,24 +1078,19 @@ function Dashboard({ products, onNuevaCompra, onEdit }) {
         ))}
       </div>
 
-      {/* Urgent */}
-      {urgent.length > 0 && (
-        <div style={{ marginBottom:28 }}>
-          <div style={{ fontSize:12, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
-            Comprar pronto
-          </div>
-          {urgent.map(p => {
-            const cat = getCat(p.category);
-            const next = getNextPurchaseDate(p);
-            const days = daysFromToday(next);
+      {urgent.length>0 && (
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>Comprar pronto</div>
+          {urgent.map(p=>{
+            const cat=getCat(p.category), next=getNextPurchaseDate(p), days=daysFromToday(next);
             return (
-              <div key={p.id} onClick={() => onEdit(p)}
-                style={{ border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', marginBottom:8, cursor:'pointer',
-                  borderColor: days<=2 ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)' }}>
+              <div key={p.id} onClick={()=>onEdit(p)} style={{
+                border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', marginBottom:8, cursor:'pointer',
+                borderColor:days<=2?'rgba(239,68,68,0.3)':'rgba(245,158,11,0.3)',
+              }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                    <span>{cat.emoji}</span>
-                    <span style={{ fontWeight:500, fontSize:13 }}>{p.name}</span>
+                    <span>{cat.emoji}</span><span style={{ fontWeight:500 }}>{p.name}</span>
                   </div>
                   <CountdownBadge days={days} />
                 </div>
@@ -696,21 +1100,40 @@ function Dashboard({ products, onNuevaCompra, onEdit }) {
         </div>
       )}
 
-      {/* Category breakdown */}
-      {byCat.length > 0 && (
-        <div>
-          <div style={{ fontSize:12, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:14 }}>
-            Gasto por categoría / mes
-          </div>
-          {byCat.map(([catId, total]) => {
-            const cat = getCat(catId);
+      {byCat.length>0 && (
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>Supermercado por categoría / mes</div>
+          {byCat.map(([catId,total])=>{
+            const cat=getCat(catId);
             return (
-              <div key={catId} style={{ marginBottom:14 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
+              <div key={catId} style={{ marginBottom:12 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:5 }}>
                   <span>{cat.emoji} {cat.label}</span>
-                  <span style={{ fontWeight:600, color:'var(--text)' }}>${total.toFixed(2)}</span>
+                  <span style={{ fontWeight:600 }}>${total.toFixed(2)}</span>
                 </div>
                 <ThinLine value={total} max={maxCat} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {topPlaces.length>0 && (
+        <div>
+          <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>Top restaurantes — últimos 30 días</div>
+          {topPlaces.map(p=>{
+            const cat=getPlaceCat(p.placeCategory);
+            const avg=avgRating(p.orders);
+            return (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 0', borderBottom:'1px solid var(--border)' }}>
+                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                  <span style={{ fontSize:18 }}>{cat.emoji}</span>
+                  <div>
+                    <div style={{ fontWeight:500 }}>{p.name}</div>
+                    {avg>0&&<StarRating value={Math.round(avg)} readOnly size={11} />}
+                  </div>
+                </div>
+                <div style={{ fontWeight:600, color:'var(--amber)' }}>${p.last30.toFixed(2)}</div>
               </div>
             );
           })}
@@ -720,144 +1143,103 @@ function Dashboard({ products, onNuevaCompra, onEdit }) {
   );
 }
 
-/* ─── LISTA ──────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   LISTA
+═══════════════════════════════════════════════════════════════ */
 function Lista({ products, onEdit, onDelete, onNuevaCompra }) {
   const [filterCat, setFilterCat] = useState('all');
   const [search, setSearch] = useState('');
 
-  const filtered = useMemo(() =>
-    products.filter(p => {
-      const okCat = filterCat === 'all' || p.category === filterCat;
-      const okSearch = p.name.toLowerCase().includes(search.toLowerCase());
-      return okCat && okSearch;
-    }), [products, filterCat, search]);
+  const filtered = useMemo(()=>
+    products.filter(p=>{
+      const okCat=filterCat==='all'||p.category===filterCat;
+      const okSearch=p.name.toLowerCase().includes(search.toLowerCase());
+      return okCat&&okSearch;
+    }),[products,filterCat,search]);
 
   return (
     <div style={{ padding:'20px 16px 100px' }}>
       <div style={{ marginBottom:16 }}>
         <h2 style={{ fontSize:20, marginBottom:12 }}>Lista</h2>
-        <input type="text" placeholder="Buscar producto…"
-          value={search} onChange={e => setSearch(e.target.value)}
-          style={{ marginBottom:10 }} />
+        <input type="text" placeholder="Buscar producto…" value={search} onChange={e=>setSearch(e.target.value)} style={{ marginBottom:10 }} />
         <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4 }}>
-          <button onClick={() => setFilterCat('all')} style={{
-            ...btnStyle(filterCat==='all'), whiteSpace:'nowrap', flexShrink:0,
-          }}>Todos</button>
-          {CATEGORIES.map(c => (
-            <button key={c.id} onClick={() => setFilterCat(c.id)} style={{
-              ...btnStyle(filterCat===c.id), whiteSpace:'nowrap', flexShrink:0,
-            }}>{c.emoji} {c.label}</button>
+          <button onClick={()=>setFilterCat('all')} style={{...chipStyle(filterCat==='all'),whiteSpace:'nowrap',flexShrink:0}}>Todos</button>
+          {CATEGORIES.map(c=>(
+            <button key={c.id} onClick={()=>setFilterCat(c.id)} style={{...chipStyle(filterCat===c.id),whiteSpace:'nowrap',flexShrink:0}}>{c.emoji} {c.label}</button>
           ))}
         </div>
       </div>
-      {filtered.length === 0 && (
+      {filtered.length===0&&(
         <div style={{ textAlign:'center', padding:'48px 0', color:'var(--muted)' }}>
-          <div style={{ fontSize:32, marginBottom:8 }}>—</div>
-          <div>Sin resultados</div>
+          <div style={{ fontSize:32, marginBottom:8 }}>—</div><div>Sin resultados</div>
         </div>
       )}
-      {filtered.map(p => (
-        <ProductCard key={p.id} product={p}
-          onEdit={onEdit} onDelete={onDelete} onNuevaCompra={onNuevaCompra} />
+      {filtered.map(p=>(
+        <ProductCard key={p.id} product={p} onEdit={onEdit} onDelete={onDelete} onNuevaCompra={onNuevaCompra} />
       ))}
     </div>
   );
 }
 
-function btnStyle(active) {
-  return {
-    padding:'5px 12px', fontSize:12, fontWeight: active ? 600 : 400,
-    background: active ? 'var(--indigo)' : 'transparent',
-    color: active ? '#fff' : 'var(--muted)',
-    border: active ? 'none' : '1px solid var(--border)',
-    borderRadius:6, cursor:'pointer', transition:'all var(--t)',
-  };
-}
-
-/* ─── PRECIOS ─────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   PRECIOS
+═══════════════════════════════════════════════════════════════ */
 function Precios({ products }) {
   const [filterCat, setFilterCat] = useState('all');
-
-  const filtered = useMemo(() =>
-    filterCat==='all' ? products : products.filter(p => p.category===filterCat), [products, filterCat]);
-
-  const grouped = useMemo(() => {
-    const m = {};
-    filtered.forEach(p => { if(!m[p.category]) m[p.category]=[]; m[p.category].push(p); });
+  const filtered = useMemo(()=>filterCat==='all'?products:products.filter(p=>p.category===filterCat),[products,filterCat]);
+  const grouped = useMemo(()=>{
+    const m={};
+    filtered.forEach(p=>{if(!m[p.category])m[p.category]=[];m[p.category].push(p);});
     return Object.entries(m);
-  }, [filtered]);
+  },[filtered]);
 
   return (
     <div style={{ padding:'20px 16px 100px' }}>
       <h2 style={{ fontSize:20, marginBottom:14 }}>Precios</h2>
       <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:10, marginBottom:16 }}>
-        <button onClick={() => setFilterCat('all')} style={{ ...btnStyle(filterCat==='all'), whiteSpace:'nowrap', flexShrink:0 }}>Todos</button>
-        {CATEGORIES.map(c => (
-          <button key={c.id} onClick={() => setFilterCat(c.id)} style={{ ...btnStyle(filterCat===c.id), whiteSpace:'nowrap', flexShrink:0 }}>
-            {c.emoji} {c.label}
-          </button>
+        <button onClick={()=>setFilterCat('all')} style={{...chipStyle(filterCat==='all'),whiteSpace:'nowrap',flexShrink:0}}>Todos</button>
+        {CATEGORIES.map(c=>(
+          <button key={c.id} onClick={()=>setFilterCat(c.id)} style={{...chipStyle(filterCat===c.id),whiteSpace:'nowrap',flexShrink:0}}>{c.emoji} {c.label}</button>
         ))}
       </div>
-
-      {grouped.length === 0 && (
+      {grouped.length===0&&(
         <div style={{ textAlign:'center', padding:'48px 0', color:'var(--muted)' }}>
-          <div style={{ fontSize:32, marginBottom:8 }}>—</div>
-          Sin precios registrados.
+          <div style={{ fontSize:32, marginBottom:8 }}>—</div>Sin precios.
         </div>
       )}
-
-      {grouped.map(([catId, prods]) => {
-        const cat = getCat(catId);
+      {grouped.map(([catId,prods])=>{
+        const cat=getCat(catId);
         return (
           <div key={catId} style={{ marginBottom:28 }}>
-            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>
-              {cat.emoji} {cat.label}
-            </div>
-            {prods.map(p => {
-              const entries = Object.entries(p.prices||{}).filter(([,v])=>v>0).sort((a,b)=>a[1]-b[1]);
-              if (!entries.length) return null;
-              const bestVal = entries[0][1];
-              const worstVal = entries[entries.length-1][1];
-              const savings = worstVal - bestVal;
+            <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>{cat.emoji} {cat.label}</div>
+            {prods.map(p=>{
+              const entries=Object.entries(p.prices||{}).filter(([,v])=>v>0).sort((a,b)=>a[1]-b[1]);
+              if(!entries.length) return null;
+              const bestVal=entries[0][1], worstVal=entries[entries.length-1][1], savings=worstVal-bestVal;
               return (
                 <div key={p.id} style={{ border:'1px solid var(--border)', borderRadius:10, padding:'12px 14px', marginBottom:8 }}>
-                  <div style={{ fontWeight:600, fontSize:13, marginBottom:10 }}>{p.name}
-                    <span style={{ fontSize:11, color:'var(--muted)', fontWeight:400, marginLeft:6 }}>/ {p.unit}</span>
-                  </div>
-                  {entries.map(([store, price]) => {
-                    const isBest = price === bestVal;
-                    const isWorst = price === worstVal && entries.length > 1;
+                  <div style={{ fontWeight:600, fontSize:13, marginBottom:10 }}>{p.name}<span style={{ fontSize:11, color:'var(--muted)', fontWeight:400, marginLeft:6 }}>/ {p.unit}</span></div>
+                  {entries.map(([store,price])=>{
+                    const isBest=price===bestVal, isWorst=price===worstVal&&entries.length>1;
                     return (
                       <div key={store} style={{
                         display:'flex', justifyContent:'space-between', alignItems:'center',
                         padding:'7px 10px', borderRadius:6, marginBottom:3,
-                        background: isBest ? 'rgba(34,197,94,0.05)' : isWorst ? 'rgba(239,68,68,0.05)' : 'var(--surface)',
-                        border: `1px solid ${isBest ? 'rgba(34,197,94,0.15)' : isWorst ? 'rgba(239,68,68,0.15)' : 'transparent'}`,
+                        background:isBest?'rgba(34,197,94,0.05)':isWorst?'rgba(239,68,68,0.05)':'var(--surface)',
+                        border:`1px solid ${isBest?'rgba(34,197,94,0.15)':isWorst?'rgba(239,68,68,0.15)':'transparent'}`,
                       }}>
                         <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
-                          <Dot color={isBest ? 'var(--success)' : isWorst ? 'var(--danger)' : 'var(--dim)'} />
-                          {store}
+                          <Dot color={isBest?'var(--success)':isWorst?'var(--danger)':'var(--dim)'} />{store}
                         </div>
                         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                          <span style={{
-                            fontWeight:600, fontSize:14,
-                            color: isBest ? 'var(--success)' : isWorst ? 'var(--danger)' : 'var(--text)',
-                          }}>${price.toFixed(2)}</span>
-                          {isWorst && savings>0.005 && (
-                            <span style={{ fontSize:11, color:'var(--danger)' }}>+${savings.toFixed(2)}</span>
-                          )}
-                          {isBest && entries.length>1 && (
-                            <span style={{ fontSize:11, color:'var(--success)' }}>mejor</span>
-                          )}
+                          <span style={{ fontWeight:600, fontSize:14, color:isBest?'var(--success)':isWorst?'var(--danger)':'var(--text)' }}>${price.toFixed(2)}</span>
+                          {isWorst&&savings>0.005&&<span style={{ fontSize:11, color:'var(--danger)' }}>+${savings.toFixed(2)}</span>}
+                          {isBest&&entries.length>1&&<span style={{ fontSize:11, color:'var(--success)' }}>mejor</span>}
                         </div>
                       </div>
                     );
                   })}
-                  {savings > 0.005 && (
-                    <div style={{ marginTop:8, fontSize:11, color:'var(--muted)', textAlign:'right' }}>
-                      Ahorro posible <strong style={{ color:'var(--success)' }}>${savings.toFixed(2)}</strong> comprando en {entries[0][0]}
-                    </div>
-                  )}
+                  {savings>0.005&&<div style={{ marginTop:8, fontSize:11, color:'var(--muted)', textAlign:'right' }}>Ahorro posible <strong style={{color:'var(--success)'}}>${savings.toFixed(2)}</strong> en {entries[0][0]}</div>}
                 </div>
               );
             })}
@@ -868,215 +1250,126 @@ function Precios({ products }) {
   );
 }
 
-/* ─── AGREGAR / EDIT FORM ─────────────────────────────────────────────────── */
-const EMPTY_FORM = {
-  name:'', category:'abarrotes', unit:'unidad', expiryDate:'', notes:'',
-  // first purchase fields
-  purchaseDate: today(),
-  store: STORES[0],
-  price: '',
-  quantity: '1',
-};
+/* ═══════════════════════════════════════════════════════════════
+   AGREGAR / EDIT PRODUCT
+═══════════════════════════════════════════════════════════════ */
+const EMPTY_FORM = { name:'', category:'abarrotes', unit:'unidad', expiryDate:'', notes:'', purchaseDate:today(), store:STORES[0], price:'', quantity:'1' };
 
 function Agregar({ editTarget, onSave, onCancel, isEditMode }) {
-  const [form, setForm] = useState(() => {
-    if (editTarget) {
-      const last = editTarget.purchaseHistory?.[editTarget.purchaseHistory.length-1];
-      return {
-        ...EMPTY_FORM,
-        name: editTarget.name || '',
-        category: editTarget.category || 'abarrotes',
-        unit: editTarget.unit || 'unidad',
-        expiryDate: editTarget.expiryDate || '',
-        notes: editTarget.notes || '',
-        purchaseDate: last?.date || today(),
-        store: last?.store || STORES[0],
-        price: last?.price ? String(last.price) : '',
-        quantity: last?.quantity ? String(last.quantity) : '1',
-      };
+  const [form, setForm] = useState(()=>{
+    if(editTarget){
+      const last=editTarget.purchaseHistory?.[editTarget.purchaseHistory.length-1];
+      return { ...EMPTY_FORM, name:editTarget.name||'', category:editTarget.category||'abarrotes', unit:editTarget.unit||'unidad', expiryDate:editTarget.expiryDate||'', notes:editTarget.notes||'', purchaseDate:last?.date||today(), store:last?.store||STORES[0], price:last?.price?String(last.price):'', quantity:last?.quantity?String(last.quantity):'1' };
     }
-    return { ...EMPTY_FORM };
+    return { ...EMPTY_FORM, purchaseDate:today() };
   });
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
 
-  const set = (k,v) => setForm(f => ({ ...f, [k]:v }));
-
-  const handleSave = () => {
-    if (!form.name.trim()) return alert('El nombre del producto es requerido.');
-    const price = parseFloat(form.price);
-    const qty = parseFloat(form.quantity) || 1;
-
-    let history = editTarget?.purchaseHistory || [];
-    let prices = editTarget?.prices || {};
-
-    if (!isEditMode) {
-      // new product — record first purchase
-      const entry = {
-        id: uid(),
-        date: form.purchaseDate,
-        store: form.store,
-        price: isNaN(price) ? 0 : price,
-        quantity: qty,
-        remainingPct: 0,
-      };
-      history = [entry];
-      if (!isNaN(price) && price > 0) prices = { ...prices, [form.store]: price };
+  const handleSave=()=>{
+    if(!form.name.trim()) return alert('El nombre es requerido.');
+    const price=parseFloat(form.price), qty=parseFloat(form.quantity)||1;
+    let history=editTarget?.purchaseHistory||[], prices=editTarget?.prices||{};
+    if(!isEditMode){
+      const entry={id:uid(),date:form.purchaseDate,store:form.store,price:isNaN(price)?0:price,quantity:qty,remainingPct:0};
+      history=[entry];
+      if(!isNaN(price)&&price>0) prices={...prices,[form.store]:price};
     }
-
-    const product = {
-      id: editTarget?.id || uid(),
-      name: form.name.trim(),
-      category: form.category,
-      unit: form.unit,
-      expiryDate: form.expiryDate || '',
-      notes: form.notes,
-      prices,
-      purchaseHistory: history,
-    };
-    onSave(product);
+    onSave({ id:editTarget?.id||uid(), name:form.name.trim(), category:form.category, unit:form.unit, expiryDate:form.expiryDate||'', notes:form.notes, prices, purchaseHistory:history });
   };
-
-  const fStyle = { marginBottom:12 };
 
   return (
     <div style={{ padding:'20px 16px 100px' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-        <h2 style={{ fontSize:20 }}>{isEditMode ? 'Editar producto' : 'Nuevo producto'}</h2>
-        {isEditMode && <Btn variant="ghost" size="sm" onClick={onCancel}>← Volver</Btn>}
+        <h2 style={{ fontSize:20 }}>{isEditMode?'Editar producto':'Nuevo producto'}</h2>
+        {isEditMode&&<Btn variant="ghost" size="sm" onClick={onCancel}>← Volver</Btn>}
       </div>
 
-      {/* Product info */}
       <div style={{ border:'1px solid var(--border)', borderRadius:10, padding:14, marginBottom:14 }}>
-        <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
-          Información del producto
-        </div>
-
+        <Label>Información del producto</Label>
+        <div style={{ height:1, background:'var(--border)', margin:'6px 0 14px' }} />
         <Label>Nombre *</Label>
-        <input style={fStyle} value={form.name} onChange={e => set('name',e.target.value)} placeholder="Ej: Leche La Lechera 1lt x6" />
-
+        <input style={{marginBottom:12}} value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Ej: Leche La Lechera 1lt x6" />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-          <div>
-            <Label>Categoría</Label>
-            <select value={form.category} onChange={e => set('category',e.target.value)}>
-              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <Label>Unidad</Label>
-            <select value={form.unit} onChange={e => set('unit',e.target.value)}>
-              {UNITS.map(u => <option key={u}>{u}</option>)}
-            </select>
-          </div>
+          <div><Label>Categoría</Label><select value={form.category} onChange={e=>set('category',e.target.value)}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}</select></div>
+          <div><Label>Unidad</Label><select value={form.unit} onChange={e=>set('unit',e.target.value)}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></div>
         </div>
-
         <Label>Fecha de caducidad (opcional)</Label>
-        <input type="date" style={fStyle} value={form.expiryDate} onChange={e => set('expiryDate',e.target.value)} />
-
+        <input type="date" style={{marginBottom:12}} value={form.expiryDate} onChange={e=>set('expiryDate',e.target.value)} />
         <Label>Notas</Label>
-        <textarea rows={2} style={{ ...fStyle, resize:'vertical' }}
-          value={form.notes} onChange={e => set('notes',e.target.value)}
-          placeholder="Observaciones…" />
+        <textarea rows={2} style={{resize:'vertical'}} value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Observaciones…" />
       </div>
 
-      {/* First purchase — only for new products */}
-      {!isEditMode && (
+      {!isEditMode&&(
         <div style={{ border:'1px solid var(--border)', borderRadius:10, padding:14, marginBottom:14 }}>
-          <div style={{ fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:12 }}>
-            Primera compra
-          </div>
+          <Label>Primera compra</Label>
+          <div style={{ height:1, background:'var(--border)', margin:'6px 0 14px' }} />
           <Label>Fecha de compra</Label>
-          <input type="date" style={fStyle} value={form.purchaseDate} onChange={e => set('purchaseDate',e.target.value)} />
+          <input type="date" style={{marginBottom:12}} value={form.purchaseDate} onChange={e=>set('purchaseDate',e.target.value)} />
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-            <div>
-              <Label>Tienda</Label>
-              <select value={form.store} onChange={e => set('store',e.target.value)}>
-                {STORES.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label>Precio ($)</Label>
-              <input type="number" min="0" step="0.01" placeholder="0.00"
-                value={form.price} onChange={e => set('price',e.target.value)} />
-            </div>
+            <div><Label>Tienda</Label><select value={form.store} onChange={e=>set('store',e.target.value)}>{STORES.map(s=><option key={s}>{s}</option>)}</select></div>
+            <div><Label>Precio ($)</Label><input type="number" min="0" step="0.01" placeholder="0.00" value={form.price} onChange={e=>set('price',e.target.value)} /></div>
           </div>
           <Label>Cantidad</Label>
-          <input type="number" min="0.01" step="0.01" style={fStyle}
-            value={form.quantity} onChange={e => set('quantity',e.target.value)} />
-          <div style={{ fontSize:12, color:'var(--muted)', marginTop:4, padding:'10px 12px', background:'var(--surface)', borderRadius:6 }}>
-            💡 Después de tu segunda compra, la app aprenderá la duración automáticamente.
+          <input type="number" min="0.01" step="0.01" value={form.quantity} onChange={e=>set('quantity',e.target.value)} />
+          <div style={{ fontSize:12, color:'var(--muted)', marginTop:12, padding:'9px 12px', background:'var(--surface)', borderRadius:6 }}>
+            💡 Tras tu 2ª compra la app aprenderá la duración automáticamente.
           </div>
         </div>
       )}
-
-      {/* Edit info note */}
-      {isEditMode && (
-        <div style={{ fontSize:12, color:'var(--muted)', padding:'10px 12px', background:'var(--surface)', borderRadius:6, marginBottom:14 }}>
-          Para registrar una nueva compra, usa el botón <strong style={{ color:'var(--success)' }}>🛒 Nueva Compra</strong> en la tarjeta del producto.
+      {isEditMode&&(
+        <div style={{ fontSize:12, color:'var(--muted)', padding:'9px 12px', background:'var(--surface)', borderRadius:6, marginBottom:14 }}>
+          Para nueva compra usa el botón <strong style={{color:'var(--success)'}}>🛒 Nueva Compra</strong> en la tarjeta.
         </div>
       )}
 
       <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-        {isEditMode && <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>}
-        <Btn variant="primary" onClick={handleSave}>
-          {isEditMode ? 'Guardar cambios' : 'Agregar producto'}
-        </Btn>
+        {isEditMode&&<Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>}
+        <Btn variant="primary" onClick={handleSave}>{isEditMode?'Guardar cambios':'Agregar producto'}</Btn>
       </div>
     </div>
   );
 }
 
-/* ─── APP ─────────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   APP ROOT
+═══════════════════════════════════════════════════════════════ */
 function App() {
   const [view, setView] = useState('dashboard');
-  const [products, setProducts] = useState(load);
+  const [products, setProducts] = useState(loadProducts);
+  const [places, setPlaces] = useState(loadPlaces);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [nuevaCompraTarget, setNuevaCompraTarget] = useState(null);
 
-  useEffect(() => { save(products); }, [products]);
+  useEffect(()=>{ saveProducts(products); },[products]);
+  useEffect(()=>{ savePlaces(places); },[places]);
 
-  const handleSave = useCallback((product) => {
-    setProducts(ps => {
-      const idx = ps.findIndex(p => p.id === product.id);
-      if (idx >= 0) { const n=[...ps]; n[idx]=product; return n; }
-      return [product, ...ps];
-    });
-    setEditTarget(null);
-    setView('lista');
-  }, []);
+  // Products handlers
+  const handleSaveProduct = useCallback((product)=>{
+    setProducts(ps=>{ const i=ps.findIndex(p=>p.id===product.id); if(i>=0){const n=[...ps];n[i]=product;return n;} return [product,...ps]; });
+    setEditTarget(null); setView('lista');
+  },[]);
+  const handleEditProduct = useCallback((p)=>{ setEditTarget(p); setView('agregar'); },[]);
+  const handleDeleteRequest = useCallback((p)=>setDeleteTarget(p),[]);
+  const handleConfirmDelete = useCallback((id)=>{ setProducts(ps=>ps.filter(p=>p.id!==id)); setDeleteTarget(null); },[]);
+  const handleNuevaCompraSave = useCallback((updated)=>{ setProducts(ps=>ps.map(p=>p.id===updated.id?updated:p)); setNuevaCompraTarget(null); },[]);
 
-  const handleEdit = useCallback((product) => {
-    setEditTarget(product);
-    setView('agregar');
-  }, []);
-
-  const handleDeleteRequest = useCallback((product) => {
-    setDeleteTarget(product);
-  }, []);
-
-  const handleDelete = useCallback((id) => {
-    setProducts(ps => ps.filter(p => p.id !== id));
-    setDeleteTarget(null);
-  }, []);
-
-  const handleNuevaCompraSave = useCallback((updated) => {
-    setProducts(ps => ps.map(p => p.id === updated.id ? updated : p));
-    setNuevaCompraTarget(null);
-  }, []);
+  // Places handlers
+  const handleUpdatePlace = useCallback((updated)=>setPlaces(ps=>ps.map(p=>p.id===updated.id?updated:p)),[]);
+  const handleAddPlace = useCallback((place)=>{
+    setPlaces(ps=>{ const i=ps.findIndex(p=>p.id===place.id); if(i>=0){const n=[...ps];n[i]=place;return n;} return [place,...ps]; });
+  },[]);
+  const handleDeletePlace = useCallback((id)=>setPlaces(ps=>ps.filter(p=>p.id!==id)),[]);
 
   const handleNavChange = (v) => {
-    if (v !== 'agregar') setEditTarget(null);
+    if(v!=='agregar') setEditTarget(null);
     setView(v);
   };
 
   return (
     <>
       <div style={{ maxWidth:800, margin:'0 auto', minHeight:'100vh' }}>
-        {/* Header */}
-        <header style={{
-          padding:'18px 16px 14px',
-          borderBottom:'1px solid var(--border)',
-          display:'flex', alignItems:'center', gap:10,
-        }}>
+        <header style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10 }}>
           <span style={{ fontSize:20 }}>🛒</span>
           <div>
             <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, fontSize:16, lineHeight:1.2 }}>SmartCompras</div>
@@ -1084,42 +1377,17 @@ function App() {
           </div>
         </header>
 
-        {view === 'dashboard' && (
-          <Dashboard products={products} onNuevaCompra={setNuevaCompraTarget} onEdit={handleEdit} />
-        )}
-        {view === 'lista' && (
-          <Lista products={products} onEdit={handleEdit} onDelete={handleDeleteRequest} onNuevaCompra={setNuevaCompraTarget} />
-        )}
-        {view === 'precios' && (
-          <Precios products={products} />
-        )}
-        {view === 'agregar' && (
-          <Agregar
-            editTarget={editTarget}
-            isEditMode={!!editTarget}
-            onSave={handleSave}
-            onCancel={() => { setEditTarget(null); setView('lista'); }}
-          />
-        )}
+        {view==='dashboard' && <Dashboard products={products} places={places} onEdit={handleEditProduct} />}
+        {view==='lista'     && <Lista products={products} onEdit={handleEditProduct} onDelete={handleDeleteRequest} onNuevaCompra={setNuevaCompraTarget} />}
+        {view==='precios'   && <Precios products={products} />}
+        {view==='calle'     && <CalleView places={places} onUpdate={handleUpdatePlace} onAdd={handleAddPlace} onDelete={handleDeletePlace} />}
+        {view==='agregar'   && <Agregar editTarget={editTarget} isEditMode={!!editTarget} onSave={handleSaveProduct} onCancel={()=>{ setEditTarget(null); setView('lista'); }} />}
 
         <NavBar view={view} onChange={handleNavChange} />
       </div>
 
-      {/* Modals */}
-      {nuevaCompraTarget && (
-        <NuevaCompraModal
-          product={nuevaCompraTarget}
-          onClose={() => setNuevaCompraTarget(null)}
-          onSave={handleNuevaCompraSave}
-        />
-      )}
-      {deleteTarget && (
-        <DeleteModal
-          product={deleteTarget}
-          onConfirm={handleDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+      {nuevaCompraTarget && <NuevaCompraModal product={nuevaCompraTarget} onClose={()=>setNuevaCompraTarget(null)} onSave={handleNuevaCompraSave} />}
+      {deleteTarget && <DeleteModal item={deleteTarget} label="producto" onConfirm={handleConfirmDelete} onCancel={()=>setDeleteTarget(null)} />}
     </>
   );
 }
